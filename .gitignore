@@ -1,0 +1,17 @@
+# ── Rust ──
+/target/
+
+# ── Node / pnpm ──
+node_modules/
+.pnpm-store/
+dist/
+
+# ── 编辑器 / 系统 ──
+.idea/
+.vscode/
+*.log
+.DS_Store
+
+# ── 本地临时 ──
+/tmp/
+*.tmp*

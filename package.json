@@ -1,0 +1,11 @@
+{
+  "name": "axctl",
+  "version": "0.1.0",
+  "description": "axum 项目的一体化开发工具（dev / build / serve / package / info）",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "axctl": "cargo run --"
+  }
+}
