@@ -2,7 +2,7 @@
 name = "axctl"
 version = "0.1.0"
 edition = "2021"
-description = "axum 项目的一体化开发工具（dev / build / serve / package / info）"
+description = "An all-in-one development tool for axum projects (dev / build / serve / package / info)"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/dragonhtdev/axctl"
 readme = "README.md"

@@ -1,32 +1,41 @@
-//! axctl —— axum 项目的一体化开发工具。
+//! axctl — an all-in-one development tool for axum projects.
 //!
-//! 对标 tauri-cli 的开发体验，为 axum + Vite 项目提供
-//! dev / build / serve / package / info 等子命令。
+//! Inspired by the tauri-cli developer experience, this CLI provides
+//! `dev` / `build` / `serve` / `package` / `info` subcommands for
+//! axum + Vite projects.
+//!
+//! 本 crate 面向公开文档（docs.rs），模块注释保持英文；
+//! 源码内部的过程性注释使用中文，见各函数实现。
 
 use clap::Parser;
 
-/// axctl 命令行入口。
+/// axctl command-line entry point.
 #[derive(Parser)]
-#[command(name = "axctl", version, about = "axum 项目的一体化开发工具", long_about = None)]
+#[command(
+    name = "axctl",
+    version,
+    about = "All-in-one development tool for axum projects",
+    long_about = None
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
 }
 
-/// 子命令集合。
+/// The set of subcommands.
 #[derive(clap::Subcommand)]
 enum Command {
-    /// 初始化项目（探测环境、生成配置）
+    /// Initialize a project (detect environment, generate config)
     Init,
-    /// 开发模式：监听源码变化，自动重编译并重启 server
+    /// Development mode: watch source changes, rebuild and restart the server automatically
     Dev,
-    /// 生产构建：构建前端产物 + cargo release 构建
+    /// Production build: build frontend assets + cargo release build
     Build,
-    /// 静态预览：直接用内嵌/磁盘静态资源服务 dist/
+    /// Static preview: serve built assets directly from disk or embedded
     Serve,
-    /// 打包：对接 cargo-packager 生成安装包
+    /// Package: generate installers via cargo-packager
     Package,
-    /// 环境诊断：输出 Rust / 前端 / 系统信息
+    /// Environment diagnostics: print Rust / frontend / system info
     Info,
 }
 
@@ -36,27 +45,27 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Command::Init => {
-            println!("axctl init —— 待实现");
+            println!("axctl init —— not implemented yet");
             Ok(())
         }
         Command::Dev => {
-            println!("axctl dev —— 待实现");
+            println!("axctl dev —— not implemented yet");
             Ok(())
         }
         Command::Build => {
-            println!("axctl build —— 待实现");
+            println!("axctl build —— not implemented yet");
             Ok(())
         }
         Command::Serve => {
-            println!("axctl serve —— 待实现");
+            println!("axctl serve —— not implemented yet");
             Ok(())
         }
         Command::Package => {
-            println!("axctl package —— 待实现");
+            println!("axctl package —— not implemented yet");
             Ok(())
         }
         Command::Info => {
-            println!("axctl info —— 待实现");
+            println!("axctl info —— not implemented yet");
             Ok(())
         }
     }

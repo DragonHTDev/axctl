@@ -1,22 +1,23 @@
 # axctl
 
-为 axum + Vite 项目提供一体化开发体验的命令行工具（对标 tauri-cli）。
+An all-in-one development tool for axum + Vite projects, inspired by the
+tauri-cli developer experience.
 
-## 子命令
+## Subcommands
 
-| 命令    | 说明                                     |
-| ------- | ---------------------------------------- |
-| `init`  | 初始化项目（探测环境、生成配置）         |
-| `dev`   | 开发模式：监听源码变化，自动重编译重启   |
-| `build` | 生产构建：前端产物 + cargo release 构建  |
-| `serve` | 静态预览：直接服务构建产物               |
-| `package` | 打包：对接 cargo-packager 生成安装包   |
-| `info`  | 环境诊断：输出 Rust / 前端 / 系统信息    |
+| Command   | Description                                          |
+| --------- | ---------------------------------------------------- |
+| `init`    | Initialize a project (detect environment, generate config) |
+| `dev`     | Development mode: watch source changes, rebuild and restart the server automatically |
+| `build`   | Production build: build frontend assets + cargo release build |
+| `serve`   | Static preview: serve built assets directly           |
+| `package` | Package: generate installers via cargo-packager      |
+| `info`    | Environment diagnostics: print Rust / frontend / system info |
 
-## 开发
+## Development
 
 ```bash
-cargo run -- info      # 运行 axctl
-pnpm axctl -- info     # 或经 pnpm 包装运行
-cargo test             # 运行测试
+cargo run -- info      # run axctl
+pnpm axctl -- info     # or run via the pnpm wrapper
+cargo test             # run tests
 ```

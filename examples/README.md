@@ -1,5 +1,6 @@
-# 示例项目
+# Example projects
 
-本目录存放 axctl 的示例项目模板，同时作为集成测试用例与使用文档。
+This directory holds axctl example project templates, which double as
+integration test cases and usage documentation.
 
-（规划中：最小 axum + Vite 模板）
+(Planned: minimal axum + Vite template)
