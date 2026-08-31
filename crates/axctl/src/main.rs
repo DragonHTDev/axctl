@@ -6,6 +6,8 @@
 //! 本 crate 是 CLI 二进制，注释不会进 docs.rs，统一使用中文；
 //! 公开文档（docs.rs）注释仅在库 crate `axctl-core` 中保留英文。
 
+mod commands;
+
 use clap::Parser;
 
 /// axctl 命令行入口。
@@ -69,9 +71,6 @@ async fn main() -> anyhow::Result<()> {
             println!("axctl package —— not implemented yet");
             Ok(())
         }
-        Command::Info => {
-            println!("axctl info —— not implemented yet");
-            Ok(())
-        }
+        Command::Info => commands::info::run(),
     }
 }

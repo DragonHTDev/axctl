@@ -7,4 +7,7 @@
 //! 模块级注释面向 docs.rs 使用英文；实现内部的过程性注释使用中文。
 
 pub mod embed;
+/// Environment probing (Rust / Node / package manager / platform).
+pub mod probe;
+/// Runtime static file serving with SPA fallback.
 pub mod serve;
