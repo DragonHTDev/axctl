@@ -6,6 +6,6 @@
   "type": "module",
   "packageManager": "pnpm@9.15.9",
   "scripts": {
-    "axctl": "cargo run --"
+    "axctl": "cargo run -p axctl --"
   }
 }

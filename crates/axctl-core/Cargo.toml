@@ -1,0 +1,14 @@
+[package]
+name = "axctl-core"
+version.workspace = true
+edition.workspace = true
+description = "Core library for axctl: embed and serve frontend assets in axum projects"
+license.workspace = true
+repository.workspace = true
+keywords = ["axum", "embed", "static", "spa"]
+categories = ["web-programming", "development-tools"]
+
+[dependencies]
+rust-embed = "8"
+axum = "0.8"
+mime_guess = "2"

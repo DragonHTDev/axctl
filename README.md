@@ -3,6 +3,15 @@
 An all-in-one development tool for axum + Vite projects, inspired by the
 tauri-cli developer experience.
 
+## Project layout
+
+```
+crates/
+├── axctl/         # CLI binary (clap + command orchestration)
+└── axctl-core/    # Library for user projects (embed / serve / probe)
+docs/design.md     # Architecture and design decisions
+```
+
 ## Subcommands
 
 | Command   | Description                                          |
@@ -17,7 +26,11 @@ tauri-cli developer experience.
 ## Development
 
 ```bash
-cargo run -- info      # run axctl
-pnpm axctl -- info     # or run via the pnpm wrapper
-cargo test             # run tests
+cargo run -p axctl -- info    # run axctl
+pnpm axctl -- info            # or run via the pnpm wrapper
+cargo test                    # run tests
 ```
+
+## Documentation
+
+See [docs/design.md](docs/design.md) for architecture decisions and design notes.
