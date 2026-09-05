@@ -12,3 +12,8 @@ categories = ["web-programming", "development-tools"]
 include_dir = "0.7"
 axum = "0.8"
 mime_guess = "2"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+tokio = { version = "1", features = ["macros", "rt"] }
+http-body-util = "0.1"

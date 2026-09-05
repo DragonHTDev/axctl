@@ -101,8 +101,11 @@ name = "axctl-core"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "http-body-util",
  "include_dir",
  "mime_guess",
+ "tokio",
+ "tower",
 ]
 
 [[package]]

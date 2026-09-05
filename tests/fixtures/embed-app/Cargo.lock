@@ -22,7 +22,9 @@ name = "axctl-embed-fixture"
 version = "0.1.0"
 dependencies = [
  "axctl-core",
+ "axum",
  "include_dir",
+ "tokio",
 ]
 
 [[package]]

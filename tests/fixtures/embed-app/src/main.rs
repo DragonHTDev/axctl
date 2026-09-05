@@ -1,47 +1,34 @@
-//! embed fixture 主程序：验证 axctl-core::frontend! 宏 + FrontendAssets。
+//! embed + serve fixture：release 内嵌 + SPA fallback 的集成验证。
 //!
-//! - release：frontend! 展开为 FrontendAssets::embedded，static/ 编译期内嵌
-//! - debug：展开为 FrontendAssets::empty，不内嵌不读盘（dev 前端归 vite）
+//! 起一个最小 axum server：`/api/status` + `spa` fallback（前端来自
+//! frontend! 内嵌）。release 跑起来后手动 curl 验证：
+//!
+//!   GET /              → index.html（200）
+//!   GET /assets/app.js → JS（200, immutable）
+//!   GET /some/route    → index.html（SPA fallback, 200）
+//!   GET /api/status    → JSON（API 正常）
+//!
+//! debug（cargo run）：frontend! 给空包装 → spa 全 404，仅 API 可用。
 
 use axctl_core::embed::FrontendAssets;
-
-/// 绑定前端产物（release 内嵌 static/，debug 空）。
-///
-/// 路径相对本 crate 的 Cargo.toml（CARGO_MANIFEST_DIR = embed-app/），
-/// static/ 就在本目录下。
-fn assets() -> FrontendAssets<'static> {
-    axctl_core::frontend!("$CARGO_MANIFEST_DIR/static")
-}
+use axum::routing::get;
+use axum::Router;
 
 fn main() {
-    let assets = assets();
+    // 绑定 frontend!（release 内嵌 static/，debug 空）
+    let assets: FrontendAssets<'static> =
+        axctl_core::frontend!("$CARGO_MANIFEST_DIR/static");
 
-    if !assets.is_embedded() {
-        // debug：不内嵌，直接打印说明并正常退出（serve 层不会走到这里）
-        println!("axctl-embed-fixture ok: debug mode, not embedded (dev uses vite)");
-        return;
-    }
+    let app = Router::new()
+        .route("/api/status", get(|| async { "{\"ok\":true}" }))
+        // Router 之间组合用 fallback_service（fallback() 只收 Handler 函数）
+        .fallback_service(axctl_core::serve::spa(assets));
 
-    // release：验证内嵌内容
-    let index = assets
-        .get_file("index.html")
-        .expect("index.html should be embedded");
-    let text = String::from_utf8_lossy(index.contents());
-    assert!(text.contains("<title>axctl embed fixture</title>"), "index.html 内容不符");
-
-    let app_js = assets
-        .get_file("assets/app.js")
-        .expect("assets/app.js should be embedded");
-    assert!(
-        String::from_utf8_lossy(app_js.contents()).contains("console.log"),
-        "app.js 内容不符"
-    );
-
-    assert!(assets.get_file("nope.txt").is_none(), "不存在文件应返回 None");
-
-    let names: Vec<String> = assets.files().map(|f| f.path().display().to_string()).collect();
-    assert!(names.iter().any(|n| n == "index.html"), "files 应含 index.html, got {names:?}");
-    assert!(names.iter().any(|n| n == "assets/app.js"), "files 应含 assets/app.js, got {names:?}");
-
-    println!("axctl-embed-fixture ok: embedded {} files", names.len());
+    let addr = "127.0.0.1:3947"; // 固定端口便于手动 curl
+    println!("axctl-embed-fixture listening on http://{addr}");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+        axum::serve(listener, app).await.unwrap();
+    });
 }

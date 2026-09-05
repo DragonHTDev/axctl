@@ -45,7 +45,7 @@ axctl/                     # workspace 根（虚拟 manifest）
 │   │           └── serve.rs     # 已实现（封装 vite preview）
 │   └── axctl-core/        # 库：给用户项目直接依赖，负责内嵌/服务/探测
 │       ├── embed.rs       #   前端内嵌（include_dir + frontend! 宏 + FrontendAssets）——已实现
-│       ├── serve.rs       #   运行时静态文件服务 + SPA fallback——TODO
+│       ├── serve.rs       #   SPA fallback 路由（spa()/缓存头/ETag）——已实现
 │       └── probe.rs       #   环境探测（已实现）
 └── docs/design.md         # 本文档
 ```
@@ -267,17 +267,39 @@ cargo 的增量编译感知不到 dist 目录变化，过程宏读取 dist 后 c
 - 用户项目 build.rs 写 `cargo:rerun-if-changed=../dist` 与 `.axctl-sentinel`
 - axctl build 在 cargo build 前 touch 哨兵文件，保证触发重编
 
-### 6.4 运行时服务（axctl-core::serve）
+### 6.4 运行时服务（已实现，axctl-core::serve::spa）
 
-```
-用户 server：
+用户 server 用 `fallback_service` 挂载（Router 组合语义，非 fallback）:
+
+```rust
+use axctl_core::frontend;
+
+let assets = frontend!("$CARGO_MANIFEST_DIR/../dist");
+let app = Router::new()
     .nest("/api", api_routes)
-    .fallback(axctl_core::serve::spa(Assets));  // 找不到文件 → index.html
+    .fallback_service(axctl_core::serve::spa(assets));
 ```
 
-SPA fallback、mime、缓存头由 axctl-core 实现，替代 axum-vite。
-dev 模式后端只挂 API（vite 负责前端），release 模式 API + 内嵌静态资源，
-由 axctl-core 提供切换帮手。
+`spa` 返回 `Router<S>`（state 泛型，handler 不 extract state）——可并入任意
+带 state 的用户 router。
+
+**行为矩阵**（release / 内嵌时）：
+
+| 请求 | 行为 |
+|---|---|
+| `GET /`（根） | 无条件回 index.html（200, no-store） |
+| `GET /assets/xxx.js`（命中） | 200 + `immutable` 缓存 + mime + ETag |
+| `GET /some/route`（无扩展名未命中） | SPA 客户端路由 → 回 index.html（200） |
+| `GET /missing.json`（带扩展名未命中） | 真 404（fetch 缺失资源绝不返回 HTML） |
+| debug（frontend! 空包装） | 全 404（dev 前端由 vite 服务，不读盘） |
+
+缓存头分层：HTML `no-store` / `assets/` 下 1 年 immutable（Vite 内容 hash）
+/ 其余 `public, no-cache`；ETag（内容 hash）+ If-None-Match → 304。
+
+SPA 回退判定用**扩展名启发式**（无扩展名路径 = 客户端路由）而非 Accept 头
+——curl / 测试工具默认 `Accept: */*` 也能命中 SPA 路由；带扩展名的缺失
+fetch 仍 404。参考 axum-vite（§6.4 设计来源），但去掉其 dev proxy / HMR /
+manifest 等 vite 专属逻辑。
 
 ## 7. 配置设计
 
@@ -400,8 +422,7 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
 ### 未实现功能
 
 - [ ] `axctl init`
-- [ ] `axctl build`（§6.1 链路 + 6.3 哨兵 touch；embed 侧已完成见 §6.2）
-- [ ] `axctl-core::serve::spa`（库：给用户 release server 挂 SPA fallback；§11 是 CLI 预览、两者不同）
+- [ ] `axctl build`（§6.1 链路 + 6.3 哨兵 touch；embed/serve 侧已完成见 §6.2/§6.4）
 - [ ] `axctl package`（对接 cargo-packager）
 - [ ] 自动化集成测试（dev 全链路：启动 → HTTP → 热重启 → 端口释放）
 - [ ] `debug-ws` 调试子命令未来移除或并入 `info`（决策后执行）
@@ -438,6 +459,9 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
 - 重复代码：`shutdown_signal` 抽到 `process.rs`（dev/serve 共用）。
 - ~~axctl-core::embed 未实现~~：include_dir + `frontend!` 宏 + FrontendAssets
   已实现（§6.2），fixture `tests/fixtures/embed-app/` 实测 release 内嵌。
+- ~~axctl-core::serve::spa 未实现~~：SPA fallback 路由已实现（§6.4）——
+  扩展名启发式回退 + 缓存头分层 + ETag/304；fixture 升级为 axum server
+  实测 release HTTP（根/静态/SPA 路由/API 全 200，缺失 fetch 404）。
 
 ## 10. 统一日志管道
 
