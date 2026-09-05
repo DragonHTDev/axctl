@@ -52,6 +52,10 @@ impl AxctlConfig {
 }
 
 /// 解析代理地址字符串（host:port）为 (host, port)。
+///
+/// host 做字符白名单校验（只允许 hostname / IPv4 / IPv6 字面量合法字符），
+/// 拒绝 shell 元字符等——dev 的 proxy_addr / frontend_dev_url 来自项目
+/// 配置，host 可能被拼进命令串（serve 的 vite --host），需防注入。
 pub fn parse_addr(addr: &str) -> Result<(String, u16)> {
     let (host, port) = addr
         .rsplit_once(':')
@@ -59,7 +63,26 @@ pub fn parse_addr(addr: &str) -> Result<(String, u16)> {
     let port = port
         .parse::<u16>()
         .with_context(|| format!("invalid port in addr: {addr}"))?;
+    validate_host(host).with_context(|| format!("invalid host in addr: {addr}"))?;
     Ok((host.to_string(), port))
+}
+
+/// host 白名单校验：只允许 hostname / IPv4 / IPv6 字面量字符。
+///
+/// 允许：字母数字、`.`、`-`、`_`、`:`（IPv6）、`[`/`]`（IPv6 字面量）。
+/// 拒绝 `&`、`|`、`;`、空格、`%` 等一切 shell 元字符与路径字符。
+fn validate_host(host: &str) -> Result<()> {
+    if host.is_empty() {
+        anyhow::bail!("host is empty");
+    }
+    let ok = host.chars().all(|c| {
+        c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ':' | '[' | ']')
+    });
+    if ok {
+        Ok(())
+    } else {
+        anyhow::bail!("host contains disallowed characters")
+    }
 }
 
 /// 从 start 目录加载 axctl 配置。
@@ -204,6 +227,25 @@ fn find_current_package<'a>(meta: &'a Metadata, start: &Path) -> Option<&'a Pack
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_addr_valid_hosts() {
+        assert_eq!(parse_addr("127.0.0.1:3000").unwrap(), ("127.0.0.1".into(), 3000));
+        assert_eq!(parse_addr("localhost:8080").unwrap(), ("localhost".into(), 8080));
+        assert_eq!(parse_addr("my-host.local:3000").unwrap(), ("my-host.local".into(), 3000));
+        assert_eq!(parse_addr("[::1]:3000").unwrap(), ("[::1]".into(), 3000));
+    }
+
+    #[test]
+    fn parse_addr_rejects_injection_host() {
+        // shell 元字符与路径字符必须被白名单拒绝（host 可能拼进命令串）
+        assert!(parse_addr("127.0.0.1&calc:3000").is_err());
+        assert!(parse_addr("x|cmd:3000").is_err());
+        assert!(parse_addr("x;y:3000").is_err());
+        assert!(parse_addr("x y:3000").is_err());
+        assert!(parse_addr(":3000").is_err()); // 空 host
+        assert!(parse_addr("host:notaport").is_err());
+    }
 
     #[test]
     fn merge_overrides() {

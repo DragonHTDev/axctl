@@ -38,10 +38,11 @@ axctl/                     # workspace 根（虚拟 manifest）
 │   │       ├── watcher.rs       # notify 监听（只注册 WatchSet 精确路径）
 │   │       ├── process.rs       # 跨平台子进程管理（进程树终止）
 │   │       ├── proxy.rs         # 反向代理（HTTP 转发 + WS 隧道）
-│   │       ├── vite.rs          # vite 探测 / 启动 / 包管理器选择
+│   │       ├── vite.rs          # vite 探测 / 启动（dev）/ 预览（serve）/ 包管理器选择
 │   │       └── commands/
 │   │           ├── info.rs      # 已实现
-│   │           └── dev.rs       # 已实现
+│   │           ├── dev.rs       # 已实现
+│   │           └── serve.rs     # 已实现（封装 vite preview）
 │   └── axctl-core/        # 库：给用户项目直接依赖，负责内嵌/服务/探测
 │       ├── embed.rs       #   内嵌静态资源（rust-embed，release 专用）——TODO
 │       ├── serve.rs       #   运行时静态文件服务 + SPA fallback——TODO
@@ -74,7 +75,7 @@ dev.rs ──► workspace.rs ──► config.rs（读取 metadata）
 | `init` | 初始化项目（探测环境、生成配置） | 未实现 |
 | `dev` | 开发模式（见 §5） | 已实现 |
 | `build` | 生产构建（见 §6） | 未实现 |
-| `serve` | 静态预览：直接服务构建产物 | 未实现 |
+| `serve` | 静态预览：封装 vite preview（纯前端，无后端） | 已实现（§11） |
 | `package` | 打包：对接 cargo-packager | 未实现 |
 | `info` | 环境诊断：输出 Rust / 前端 / 系统信息 | 已实现 |
 | `debug-ws` | 打印 workspace 解析结果与 WatchSet（隐藏调试命令） | 已实现 |
@@ -376,7 +377,7 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
 
 - [ ] `axctl init`
 - [ ] `axctl build`（§6 全套：哨兵 + rust-embed + build.rs 接线）
-- [ ] `axctl serve` / `axctl-core::serve::spa`
+- [ ] `axctl-core::serve::spa`（库：给用户 release server 挂 SPA fallback；§11 是 CLI 预览、两者不同）
 - [ ] `axctl package`（对接 cargo-packager）
 - [ ] 自动化集成测试（dev 全链路：启动 → HTTP → 热重启 → 端口释放）
 - [ ] `debug-ws` 调试子命令未来移除或并入 `info`（决策后执行）
@@ -404,6 +405,13 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
   编译期间新变更置 pending，结束后补一轮（§5.9）。
 - 集成测试骨架：`crates/axctl/tests/dev_smoke.rs`（#[ignore]，需 node+vite，
   黑盒冒烟：起 dev → 代理 200 → 改源码 → PID 变化）。
+- ~~`axctl serve` 未实现~~：改为封装 `vite preview`（§11），已实测
+  静态 200 + SPA fallback 200。
+- ~~serve 就绪探测误报~~：HTTP 探测 + 子进程退出监控 + 稳定确认（§11.3），
+  实测端口占用场景不再误报 ready。
+- ~~npx 隐式下载 / host 注入面~~：`--no-install`；`parse_addr` host 白名单
+  校验（dev/serve 共用，§7）。
+- 重复代码：`shutdown_signal` 抽到 `process.rs`（dev/serve 共用）。
 
 ## 10. 统一日志管道
 
@@ -483,3 +491,58 @@ tracing 宏的 `target:` 参数只接受编译期字符串字面量，故代码�
 参考 SeaLantern `crates/feature/src/observability.rs` 的"target + event_name +
 薄封装函数"模式，但做减法：CLI 无常驻事件流，不需要事件键注册表，
 只保留 target 约定与结构化字段，避免过度设计。
+
+## 11. serve 模式：封装 vite preview
+
+### 11.1 定位
+
+`axctl serve` 是**纯前端生产预览**——封装 `vite preview`，服务
+`vite.config.ts` 的 `build.outDir`（通常 `dist/`）。**无后端、无 API 代理**
+（前端请求 `/api/*` 会失败，因为没有后端可转发）。
+
+设计取舍：不自研静态服务（tower-http / axum fallback），直接复用 vite
+preview——SPA fallback、mime、缓存头、history 路由全由 vite 处理，行为与
+真实产物严格一致，且零新增依赖（复用 vite.rs 的包管理器探测与 spawn）。
+
+### 11.2 CLI
+
+```text
+axctl serve [--dir <frontend-root>] [--addr 127.0.0.1:4173] [--open]
+```
+
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `--dir` | 当前目录 | 前端项目根（含 package.json / vite.config.ts） |
+| `--addr` | 127.0.0.1:4173 | 监听地址（4173 = vite preview 惯例端口） |
+| `--open` | false | 启动后自动开浏览器（透传 vite --open） |
+
+### 11.3 流程
+
+1. 定位前端根：`--dir` 优先，否则当前目录（须有 package.json）。
+2. `vite::spawn_vite_preview`：按包管理器拼 `pnpm exec vite preview` /
+   `npx --no-install vite preview` + `--host --port --strictPort`。
+   `--strictPort`：端口被占直接报错，不静默换端口；
+   `--no-install`：本地 node_modules 无 vite 时立即报错，不让 npx 联网装包。
+3. 就绪探测（合并轮询，`wait_ready`）：
+   - **HTTP GET /** 探测（非纯 TCP——TCP 连通可能是"端口占用者"而非 vite，
+     裸 TCP 占用者 accept 但不响应 HTTP；探测带 2s 超时防挂起）；
+   - 每轮先查子进程是否退出（`try_wait`）——vite 异步启动，`--strictPort`
+     遇端口被占 / dist 缺失时**启动后**才报错退出，必须持续监控；
+   - HTTP 首次通后隔 300ms "稳定确认"（子进程仍存活 + HTTP 仍通）才判
+     Ready，覆盖"首轮连上占用者、vite 随后退出"的竞态窗口。
+4. 错误区分：提前退出（报退出码 + 端口被占 / dist 缺失提示）vs 15s 超时。
+5. 打印就绪地址，等待 Ctrl+C / SIGTERM → kill preview 进程树。
+
+### 11.4 为什么无 cargo metadata / workspace 解析
+
+serve 只在前端根跑 vite preview，不需要知道 backend member、依赖闭包等
+workspace 信息——保持极简独立，与 dev 解耦。这也契合"纯前端预览"定位：
+不编译、不解析、不写文件，只读 dist。
+
+### 11.5 已知边界
+
+- 需要项目里有 vite（node_modules 就绪）；否则 spawn 失败并报错。
+- SPA fallback 对"真实缺失的静态资源"也回 index.html（vite preview
+  行为）——预览场景可接受，正式 release 由 server 侧缓存策略处理。
+- `--dir` 指向非本 workspace 的独立 dist 项目也可用（vite 自己读配置）。
+

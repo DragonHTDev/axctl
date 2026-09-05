@@ -162,6 +162,20 @@ impl ManagedChild {
         // 等待进程真正退出，避免僵尸
         let _ = self.child.wait().await;
     }
+
+    /// 非阻塞探测进程是否已退出（不回收，可多次调用）。
+    ///
+    /// 返回 `Ok(Some(exit_status))` 表示进程已退出；`Ok(None)` 表示仍在
+    /// 运行。用于 spawn 后判断子进程是否**提前退出**（如 vite preview 遇
+    /// 端口被占立刻退出），避免对已死进程做无意义的就绪轮询。
+    ///
+    /// 注意：tokio 的 `Child::try_wait` 是同步方法（非 async），本包装
+    /// 保持一致——在 async 上下文里直接调用即可。
+    pub fn try_wait(
+        &mut self,
+    ) -> std::result::Result<Option<std::process::ExitStatus>, std::io::Error> {
+        self.child.try_wait()
+    }
 }
 
 /// 终止 pid 进程树。
@@ -262,6 +276,32 @@ fn child_pids(pid: u32) -> Option<Vec<u32>> {
 #[cfg(unix)]
 fn process_exists(pid: u32) -> bool {
     unsafe { libc::kill(pid as i32, 0) == 0 }
+}
+
+/// 等待进程终止信号（Ctrl+C / SIGTERM）。
+///
+/// 供 dev / serve 等长驻子命令在 `tokio::select!` 中作为终止条件使用：
+///
+/// ```rust,ignore
+/// let ctrl_c = tokio::signal::ctrl_c();
+/// let mut terminate = std::pin::pin!(process::shutdown_signal());
+/// tokio::select! { _ = ctrl_c => {}, _ = &mut terminate => {} }
+/// ```
+///
+/// Windows 无 SIGTERM 语义，保持挂起（只等 Ctrl+C）。
+pub async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        let mut sigterm =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("failed to install SIGTERM handler");
+        sigterm.recv().await;
+    }
+    #[cfg(not(unix))]
+    {
+        // Windows：无 SIGTERM，直接挂起；实际终止由 Ctrl+C 分支触发
+        std::future::pending::<()>().await;
+    }
 }
 
 #[cfg(test)]

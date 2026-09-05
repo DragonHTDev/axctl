@@ -87,14 +87,15 @@ async fn dev_smoke_end_to_end() {
         .spawn()
         .expect("failed to spawn axctl dev");
 
-    // 清理 guard：杀 axctl 进程树 + 恢复 fixture main.rs 原文
+    // 清理 guard：杀 axctl **整棵进程树** + 恢复 fixture main.rs 原文
     let main_rs = fixture.join("src").join("main.rs");
     let original_src = std::fs::read_to_string(&main_rs).expect("read fixture main.rs");
     struct Guard(Option<Child>, PathBuf, String);
     impl Drop for Guard {
         fn drop(&mut self) {
             if let Some(child) = self.0.as_mut() {
-                let _ = child.kill();
+                // std::process::Child::id() 返回 u32（非 Option）
+                kill_tree(child.id());
                 let _ = child.wait();
             }
             // 恢复 fixture（避免多次运行累积污染 git diff）
@@ -141,4 +142,23 @@ async fn dev_smoke_end_to_end() {
         }
     }
     assert!(restarted, "backend 应因源码变更而重启（PID 变化）");
+}
+
+/// 终止 pid 所在进程树（测试清理用；集成测试不便依赖 axctl crate 内部
+/// 函数，故在此写平台分支小辅助）。
+fn kill_tree(pid: u32) {
+    #[cfg(windows)]
+    {
+        // taskkill 连树强杀（cmd /C → node 整链）
+        let _ = Command::new("taskkill")
+            .args(["/pid", &pid.to_string(), "/t", "/f"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    #[cfg(unix)]
+    {
+        // Unix：kill 根进程（测试场景子进程通常随父退出）
+        let _ = Command::new("kill").arg("-9").arg(pid.to_string()).status();
+    }
 }

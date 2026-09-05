@@ -19,7 +19,7 @@ use tokio::sync::Mutex;
 use crate::backend::{self, BackendTarget};
 use crate::config;
 use crate::logging;
-use crate::process::ManagedChild;
+use crate::process::{self, ManagedChild};
 use crate::proxy::{self, ProxyTarget};
 use crate::vite;
 use crate::watch_set::WatchSet;
@@ -307,7 +307,7 @@ pub async fn run() -> Result<()> {
 
     // ── 等待 Ctrl+C / SIGTERM / 代理异常退出 ──
     let ctrl_c = tokio::signal::ctrl_c();
-    let mut terminate = std::pin::pin!(shutdown_signal());
+    let mut terminate = std::pin::pin!(process::shutdown_signal());
     let mut proxy_task_mut = &mut proxy_task;
     tokio::select! {
         _ = ctrl_c => {},
@@ -361,18 +361,4 @@ async fn restart_backend(
     let new_child = spawn_backend_binary(workspace, target, addr).await?;
     *child = new_child;
     Ok(())
-}
-
-/// 非 Unix 平台下等待 SIGTERM 的占位（Windows 无 SIGTERM，保持挂起）。
-#[cfg(not(unix))]
-fn shutdown_signal() -> std::future::Pending<()> {
-    std::future::pending()
-}
-
-/// Unix 平台下等待 SIGTERM。
-#[cfg(unix)]
-async fn shutdown_signal() {
-    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-        .expect("failed to install SIGTERM handler");
-    sigterm.recv().await;
 }

@@ -90,9 +90,52 @@ fn command_exists(name: &str) -> bool {
 /// Windows 下 `.cmd` shim 的处理由 `spawn_command` 统一负责。
 pub async fn spawn_vite(project_root: &Path) -> Result<ManagedChild> {
     let pm = package_manager();
+    // dev 统一用 `exec vite`（npm/pnpm 对称），不经 package.json 的 dev script——
+    // 与 pnpm exec vite 语义一致，避免 npm run dev 与 pnpm exec vite 行为分叉。
     let command = match pm {
         "pnpm" => "pnpm exec vite".to_string(),
-        _ => "npm run dev".to_string(),
+        _ => "npm exec vite".to_string(),
     };
     ManagedChild::spawn_command("vite", &command, Some(project_root), &[])
 }
+
+/// 启动 `vite preview` 服务构建产物（生产预览）。
+///
+/// vite preview 会读项目的 vite.config.ts，服务其 `build.outDir`（通常
+/// dist/），并自带 SPA fallback / mime / 缓存——比 axctl 自研静态服务
+/// 更可靠且零新增依赖。
+///
+/// `addr` 形如 `127.0.0.1:4173`；用 `--strictPort` 让端口被占时直接
+/// 报错而非静默换端口。`open` 为 true 时让 vite 自动开浏览器。
+pub async fn spawn_vite_preview(
+    project_root: &Path,
+    addr: &str,
+    open: bool,
+) -> Result<ManagedChild> {
+    let (host, port) = crate::config::parse_addr(addr)?;
+    let pm = package_manager();
+    // --no-install：本地 node_modules 没有 vite 时立即报错（与文档一致），
+    // 不让 npx 联网静默装包。
+    let command = match pm {
+        "pnpm" => format!("pnpm exec vite preview --host {host} --port {port} --strictPort{}", open_flag(open)),
+        _ => format!("npx --no-install vite preview --host {host} --port {port} --strictPort{}", open_flag(open)),
+    };
+    ManagedChild::spawn_command("vite-preview", &command, Some(project_root), &[])
+}
+
+/// `open` → " --open"，否则空串。
+fn open_flag(open: bool) -> &'static str {
+    if open { " --open" } else { "" }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn open_flag_toggle() {
+        assert_eq!(open_flag(true), " --open");
+        assert_eq!(open_flag(false), "");
+    }
+}
+

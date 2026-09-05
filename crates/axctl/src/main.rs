@@ -1,4 +1,4 @@
-﻿//! axctl —— axum 项目的一体化开发工具。
+//! axctl —— axum 项目的一体化开发工具。
 //!
 //! 对标 tauri-cli 的开发体验，为 axum + Vite 项目提供
 //! `dev` / `build` / `serve` / `package` / `info` 等子命令。
@@ -45,9 +45,9 @@ enum Command {
     /// 生产构建：构建前端产物 + cargo release 构建
     #[command(about = "Production build: build frontend assets + cargo release build")]
     Build,
-    /// 静态预览：直接服务构建产物（磁盘或内嵌）
-    #[command(about = "Static preview: serve built assets directly from disk or embedded")]
-    Serve,
+    /// 静态预览：封装 vite preview 服务构建产物（纯前端，无后端）
+    #[command(about = "Preview the built frontend via vite preview (static, no backend)")]
+    Serve(commands::serve::ServeArgs),
     /// 打包：对接 cargo-packager 生成安装包
     #[command(about = "Package: generate installers via cargo-packager")]
     Package,
@@ -91,9 +91,13 @@ fn dispatch(command: Command) -> anyhow::Result<()> {
             crate::logging::warn("build is not implemented yet");
             Ok(())
         }
-        Command::Serve => {
-            crate::logging::warn("serve is not implemented yet");
-            Ok(())
+        Command::Serve(args) => {
+            // serve 需要 Tokio 运行时（vite preview 就绪探测 + Ctrl+C 处理）
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .context("failed to build tokio runtime")?;
+            rt.block_on(commands::serve::run(args))
         }
         Command::Package => {
             crate::logging::warn("package is not implemented yet");

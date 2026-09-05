@@ -1,4 +1,4 @@
-﻿//! 最小 axum 后端，用于验证 axctl dev 的代理与热重载。
+//! 最小 axum 后端，用于验证 axctl dev 的代理与热重载。
 
 use std::net::SocketAddr;
 
