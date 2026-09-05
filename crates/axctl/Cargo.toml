@@ -18,13 +18,20 @@ path = "src/main.rs"
 axctl-core = { path = "../axctl-core" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "net", "process", "signal", "time"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "net", "process", "signal", "time", "sync", "fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
+cargo_metadata = "0.19"
 notify-debouncer-full = "0.3"
-axum = "0.8"
+axum = { version = "0.8", features = ["ws"] }
 reqwest = { version = "0.12", default-features = false, features = ["stream", "json"] }
 tokio-tungstenite = "0.24"
+futures-util = "0.3"
+console = "0.15"
+
+# Unix 进程组终止（kill_tree 用 setpgid + kill(-pgid)）
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

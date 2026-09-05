@@ -1,5 +1,9 @@
 # ── Rust ──
 /target/
+# 测试 fixture 内可能生成的构建产物
+tests/fixtures/*/target/
+tests/fixtures/*/node_modules/
+tests/fixtures/*/dist/
 
 # ── Node / pnpm ──
 node_modules/

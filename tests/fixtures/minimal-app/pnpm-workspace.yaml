@@ -1,0 +1,4 @@
+# fixture 自身的 workspace 声明：让 pnpm 以本目录为 workspace 根，
+# 避免向上命中 axctl 仓库根的 pnpm-workspace.yaml（否则 vite 解析错乱）。
+packages:
+  - "."

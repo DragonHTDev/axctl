@@ -1,0 +1,24 @@
+# 空 workspace 表：声明本 fixture 独立于外层 axctl workspace。
+# 没有它，cargo 会向上找到 axctl 根的 [workspace] 但本包不在 members，
+# 报 "believes it's in a workspace when it's not"。
+[workspace]
+
+[package]
+name = "axctl-fixture-server"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.axctl]
+# 后端启动命令：用环境变量传地址
+backend_command = "cargo run"
+
+[package.metadata.axctl.build]
+# 前端构建命令：npm（避开本机 pnpm 的 ignore-builds 策略）
+frontend_build_command = "npm"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+console = "0.15"
