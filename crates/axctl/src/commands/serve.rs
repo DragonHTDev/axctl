@@ -55,7 +55,7 @@ pub async fn run(args: ServeArgs) -> Result<()> {
         );
     }
 
-    logging::info(format!("serving production build from {}", frontend_root.display()));
+    logging::info(format!("serving production frontend from {}", frontend_root.display()));
     logging::info(format!("using vite preview at http://{}", args.addr));
 
     // 启动 vite preview
