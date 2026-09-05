@@ -44,7 +44,7 @@ axctl/                     # workspace 根（虚拟 manifest）
 │   │           ├── dev.rs       # 已实现
 │   │           └── serve.rs     # 已实现（封装 vite preview）
 │   └── axctl-core/        # 库：给用户项目直接依赖，负责内嵌/服务/探测
-│       ├── embed.rs       #   内嵌静态资源（rust-embed，release 专用）——TODO
+│       ├── embed.rs       #   前端内嵌（include_dir + frontend! 宏 + FrontendAssets）——已实现
 │       ├── serve.rs       #   运行时静态文件服务 + SPA fallback——TODO
 │       └── probe.rs       #   环境探测（已实现）
 └── docs/design.md         # 本文档
@@ -215,7 +215,7 @@ notify 回调只把 `ChangeBatch` 经 `std::sync::mpsc` 发给 watcher 线程，
 后端与 vite dev server 暴露到网络（vite 的 @fs 与 HMR 有历史 RCE，
 CVE-2025-30221 等），仅受信的本机开发环境可用。
 
-## 6. build 模式：内嵌 web 产物（未实现，设计保留）
+## 6. build 模式：内嵌 web 产物
 
 ### 6.1 链路
 
@@ -229,11 +229,35 @@ axctl build
        └─ 宏展开 → 新 dist 烙进二进制 ✅
 ```
 
-### 6.2 内嵌方案：rust-embed
+（`axctl build` 命令本身未实现；本条链路的"内嵌"侧已由 axctl-core::embed 提供。）
 
-- release 模式编译期内嵌，单文件分发。
-- debug 模式读磁盘，前端改动免重编译。
-- `axctl-core` 提供 `include_frontend!` 宏 / Assets derive。
+### 6.2 内嵌方案：include_dir + frontend! 宏（已实现，axctl-core::embed）
+
+用户 server crate 里用 `frontend!` 宏绑定一个 `FrontendAssets` 包装值：
+
+```rust
+use axctl_core::embed::FrontendAssets;
+
+// release：编译期内嵌 "$CARGO_MANIFEST_DIR/../dist"；debug：空包装
+let assets: FrontendAssets<'static> =
+    axctl_core::frontend!("$CARGO_MANIFEST_DIR/../dist");
+// assets.get_file("index.html") → Option<&File>（递归按路径查）
+// assets.files()               → 递归迭代所有文件
+// assets.is_embedded()         → release true / debug false
+```
+
+- **release**：`include_dir!` proc-macro 编译期读目录烙进二进制 → 单文件
+  分发，运行时不依赖磁盘 dist。
+- **debug**：`frontend!` 展开为 `FrontendAssets::empty`，**不内嵌、不读盘**
+  ——dev 前端由 vite(5173) 服务，serve 层只在 release 挂载（§6.4）。
+- 依赖约束：`include_dir!` 展开引用裸 `include_dir::`，调用方须直接依赖
+  `include_dir = "0.7"`（与 axum-vite `embedded_dir!` 同款要求）。
+- 形态取舍：选 include_dir 而非 rust-embed，因为要的是 **`let assets =
+  macro!(...)` 表达式值**（能传给 serve 层）；rust-embed 是 derive 形态，
+  资源挂在类型上只能静态调用，无法作值传递。
+- 验证：`tests/fixtures/embed-app/`（独立 crate，static/ 版本化假前端）。
+  实测 release 内嵌后删 static/ 目录二进制仍能读到文件；debug 输出
+  "not embedded"。
 
 ### 6.3 哨兵机制（关键坑）
 
@@ -353,7 +377,7 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
 
 | 依赖 | 用途 |
 | --- | --- |
-| rust-embed | 内嵌静态资源 |
+| include_dir | 前端目录编译期内嵌（frontend! 宏底层） |
 | axum | 静态服务 / SPA fallback |
 | mime_guess | mime 推断 |
 
@@ -376,7 +400,7 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
 ### 未实现功能
 
 - [ ] `axctl init`
-- [ ] `axctl build`（§6 全套：哨兵 + rust-embed + build.rs 接线）
+- [ ] `axctl build`（§6.1 链路 + 6.3 哨兵 touch；embed 侧已完成见 §6.2）
 - [ ] `axctl-core::serve::spa`（库：给用户 release server 挂 SPA fallback；§11 是 CLI 预览、两者不同）
 - [ ] `axctl package`（对接 cargo-packager）
 - [ ] 自动化集成测试（dev 全链路：启动 → HTTP → 热重启 → 端口释放）
@@ -412,6 +436,8 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
 - ~~npx 隐式下载 / host 注入面~~：`--no-install`；`parse_addr` host 白名单
   校验（dev/serve 共用，§7）。
 - 重复代码：`shutdown_signal` 抽到 `process.rs`（dev/serve 共用）。
+- ~~axctl-core::embed 未实现~~：include_dir + `frontend!` 宏 + FrontendAssets
+  已实现（§6.2），fixture `tests/fixtures/embed-app/` 实测 release 内嵌。
 
 ## 10. 统一日志管道
 

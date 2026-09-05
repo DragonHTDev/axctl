@@ -9,6 +9,6 @@ keywords = ["axum", "embed", "static", "spa"]
 categories = ["web-programming", "development-tools"]
 
 [dependencies]
-rust-embed = "8"
+include_dir = "0.7"
 axum = "0.8"
 mime_guess = "2"
