@@ -12,16 +12,26 @@
 //!
 //! ```rust,ignore
 //! use axctl_core::frontend;
+//! use axum::Router;
 //!
+//! // 前端产物（release 内嵌 / debug 空包装）
 //! let assets = frontend!("$CARGO_MANIFEST_DIR/../dist");
 //!
+//! // API 挂 /api，其余全部交给 SPA 前端
 //! let app = Router::new()
-//!     .nest("/api", api_routes)
-//!     .fallback_service(axctl_core::serve::spa(assets));  // Router 组合用 fallback_service
+//!     .nest("/api", api_routes)                       // 业务 API 优先
+//!     .fallback_service(axctl_core::serve::spa(assets)); // Router 组合用 fallback_service
 //! ```
 //!
-//! The router is state-generic (`Router<S>`): its handlers never extract
-//! application state, so it composes with any stateful API router.
+//! # Known boundary: dot-in-path heuristic
+//!
+//! The extension heuristic is a double-edged sword. It makes SPA routes
+//! verifiable with `curl` (which sends `Accept: */*`), but the flip side is
+//! that an extension-bearing **valid SPA route** is treated as a missing asset
+//! and returns 404 — e.g. `/order/2024.12`, `/user/v1.2/profile`. If your
+//! client-side routes may contain dots, either keep them dot-free or mount an
+//! explicit route / allow-list for those paths in your own router. Do not file
+//! this as a bug; it is a deliberate trade-off (see design §6.4).
 //!
 //! # Debug / release
 //!
