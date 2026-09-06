@@ -217,19 +217,20 @@ CVE-2025-30221 等），仅受信的本机开发环境可用。
 
 ## 6. build 模式：内嵌 web 产物
 
-### 6.1 链路
+### 6.1 链路（全部已实现）
 
 ```
 axctl build
-├─ 1. 校验 frontend_root / package.json
-├─ 2. vite build（pnpm 或 npm，可配置）      → dist/
-├─ 3. 写入 dist/.axctl-sentinel（内容 = 产物 hash）  ← 哨兵
-└─ 4. cargo build --release
-       ├─ build.rs rerun-if-changed 命中 → 重编
-       └─ 宏展开 → 新 dist 烙进二进制 ✅
+├─ 1. 定位前端根 + 校验 package.json         ✅
+├─ 2. vite build（pnpm/npm exec）→ dist/      ✅
+├─ 3. 写入 dist/.axctl-sentinel（dist 指纹）  ✅ 哨兵（§6.3）
+└─ 4. cargo build --release -p <backend>      ✅
+       ├─ build.rs rerun-if-changed 命中 → 重编（已实证）
+       └─ frontend! 宏展开 → 新 dist 烙进二进制 ✅（§6.2/§6.4）
 ```
 
-（`axctl build` 命令本身未实现；本条链路的"内嵌"侧已由 axctl-core::embed 提供。）
+实测：minimal-app 上 `axctl build` 一次跑通（vite build 37ms → 哨兵写入 →
+release 编译 17s → 产物 exe）；哨兵指纹每次构建变化（含 mtime）。
 
 ### 6.2 内嵌方案：include_dir + frontend! 宏（已实现，axctl-core::embed）
 
@@ -259,13 +260,29 @@ let assets: FrontendAssets<'static> =
   实测 release 内嵌后删 static/ 目录二进制仍能读到文件；debug 输出
   "not embedded"。
 
-### 6.3 哨兵机制（关键坑）
+### 6.3 哨兵机制（已实现，axctl build 写入）
 
-cargo 的增量编译感知不到 dist 目录变化，过程宏读取 dist 后 cargo 认为"源码没变"
-不重编，导致内嵌旧产物。解法：
+**坑**：cargo 增量编译感知不到 dist 目录变化，`frontend!` 宏读 dist 后 cargo
+认为"源码没变"不重编 → 内嵌旧产物。
 
-- 用户项目 build.rs 写 `cargo:rerun-if-changed=../dist` 与 `.axctl-sentinel`
-- axctl build 在 cargo build 前 touch 哨兵文件，保证触发重编
+**解法**（已实现）：
+- `axctl build` 在 vite build 后、cargo release 前，写 `dist/.axctl-sentinel`，
+  内容 = **dist 指纹**（文件名+大小+mtime 的 hash，每次构建必变——
+  已实测同一产物重复 build 指纹仍变化）。
+- 用户 server 的 build.rs 声明契约：
+  ```rust
+  fn main() {
+      println!("cargo:rerun-if-changed=../dist/.axctl-sentinel");
+      println!("cargo:rerun-if-changed=../dist"); // 可选兜底
+  }
+  ```
+- **传导实证**（reruntest）：哨兵内容变 → build.rs 重跑 → 主 crate 重编
+  （`BUILD_STAMP` 变化 + "Compiling" 出现）。无需 OUT_DIR 桥接——
+  build.rs rerun 命中即可传导。
+
+**为何不用 tauri 的 `write_if_changed`（内容相同不写）**：哨兵职责是"每次
+构建都让 cargo 感知发生了构建"，若产物相同就不写，cargo 可能跳过重编。
+指纹含 mtime 保证每次必变，天然规避该问题。
 
 ### 6.4 运行时服务（已实现，axctl-core::serve::spa）
 
@@ -427,7 +444,6 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
 ### 未实现功能
 
 - [ ] `axctl init`
-- [ ] `axctl build` 后端部分（哨兵 touch + cargo release 构建；**前端 vite build 已完成**——§6.1 链路步骤 1-2）
 - [ ] `axctl package`（对接 cargo-packager）
 - [ ] 自动化集成测试（dev 全链路：启动 → HTTP → 热重启 → 端口释放）
 - [ ] `debug-ws` 调试子命令未来移除或并入 `info`（决策后执行）
@@ -467,6 +483,8 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
 - ~~axctl-core::serve::spa 未实现~~：SPA fallback 路由已实现（§6.4）——
   扩展名启发式回退 + 缓存头分层 + ETag/304；fixture 升级为 axum server
   实测 release HTTP（根/静态/SPA 路由/API 全 200，缺失 fetch 404）。
+- ~~axctl build 未实现~~：完整链路已实现（§6.1）——前端 vite build +
+  哨兵写入（dist 指纹）+ 后端 release 构建；哨兵传导经 reruntest 实证。
 
 ## 10. 统一日志管道
 

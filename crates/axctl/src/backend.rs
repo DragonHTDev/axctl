@@ -170,8 +170,29 @@ fn resolve_bin_name(member: &MemberInfo, cfg: &AxctlConfig) -> Result<String> {
 
 /// 编译 backend（阻塞到 cargo 退出）。
 pub async fn cargo_build(ws: &WorkspaceInfo, target: &BackendTarget) -> Result<()> {
+    cargo_build_profile(ws, target, "dev").await
+}
+
+/// 以 release profile 编译后端（`cargo build --release -p <pkg> --bin <bin>`）。
+///
+/// 供 `axctl build` 生产构建用；产物在 `target/release/<bin>(.exe)`。
+pub async fn cargo_build_release(ws: &WorkspaceInfo, target: &BackendTarget) -> Result<()> {
+    cargo_build_profile(ws, target, "release").await
+}
+
+/// 按 profile 编译后端，阻塞到 cargo 退出。
+async fn cargo_build_profile(
+    ws: &WorkspaceInfo,
+    target: &BackendTarget,
+    profile: &str,
+) -> Result<()> {
     let mut cmd = tokio::process::Command::new("cargo");
-    cmd.args(["build", "-p", &target.package, "--bin", &target.bin])
+    if profile == "release" {
+        cmd.arg("build").arg("--release");
+    } else {
+        cmd.arg("build");
+    }
+    cmd.args(["-p", &target.package, "--bin", &target.bin])
         .current_dir(&ws.root)
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
@@ -191,12 +212,19 @@ pub async fn cargo_build(ws: &WorkspaceInfo, target: &BackendTarget) -> Result<(
     }
 }
 
-/// 编译产物路径：`<target_dir>/debug/<bin>(.exe)`。
-///
-/// 目前只支持 dev profile（debug）。产物在 spawn 前必须存在
-/// （cargo_build 成功后才有）。
+/// dev 产物路径：`<target_dir>/debug/<bin>(.exe)`。
 pub fn binary_path(ws: &WorkspaceInfo, target: &BackendTarget) -> PathBuf {
-    let mut path = ws.target_dir.join("debug").join(&target.bin);
+    binary_path_for(ws, target, "debug")
+}
+
+/// release 产物路径：`<target_dir>/release/<bin>(.exe)`。
+pub fn release_binary_path(ws: &WorkspaceInfo, target: &BackendTarget) -> PathBuf {
+    binary_path_for(ws, target, "release")
+}
+
+/// 按 profile 目录拼产物路径（`debug` / `release`）。
+fn binary_path_for(ws: &WorkspaceInfo, target: &BackendTarget, profile: &str) -> PathBuf {
+    let mut path = ws.target_dir.join(profile).join(&target.bin);
     if cfg!(windows) {
         path.set_extension("exe");
     }

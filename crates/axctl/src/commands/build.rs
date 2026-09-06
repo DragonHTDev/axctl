@@ -1,18 +1,21 @@
-//! `axctl build` 命令：生产构建（前端部分）。
+//! `axctl build` 命令：生产构建。
 //!
-//! 当前实现阶段：只做**前端 vite build**——产出 `dist/`。
-//! 后端 release 构建与哨兵写入（§6.1/§6.3）为后续步骤，届时本命令会把
-//! `vite build → 写 .axctl-sentinel → cargo build --release` 串成一条链。
-//!
-//! 前端根定位（与 dev 一致）：`frontend_root` 配置优先（相对 workspace
-//! 根），否则 workspace 根本身；`--dir` 显式覆盖。
+//! 完整链路：
+//! 1. 定位前端根（frontend_root 配置 > workspace 根；`--dir` 覆盖）
+//! 2. `vite build` → dist/
+//! 3. 写 `dist/.axctl-sentinel`（哨兵：dist 指纹，含 mtime 故每次构建必变）
+//!    ——让用户 build.rs 的 rerun-if-changed 命中，触发 server 重编内嵌
+//! 4. `cargo build --release -p <backend> --bin <bin>`
 
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
+use crate::backend;
+use crate::config;
 use crate::logging;
 use crate::vite;
+use crate::workspace::WorkspaceInfo;
 
 /// `axctl build` 命令参数。
 #[derive(Debug, Clone, clap::Args)]
@@ -23,48 +26,104 @@ pub struct BuildArgs {
     pub dir: Option<PathBuf>,
 }
 
-/// `axctl build` 主流程（前端部分）。
+/// `axctl build` 主流程。
 pub async fn run(args: BuildArgs) -> Result<()> {
-    // workspace 根：cargo metadata 定位（build 是 workspace 级操作）
     let cwd = std::env::current_dir().context("failed to get current directory")?;
-    let workspace_root = workspace_root_of(&cwd)?;
 
-    // 前端根：--dir > frontend_root 配置 > workspace 根
+    // ── 0. workspace / 配置 ──
+    let workspace = WorkspaceInfo::load(&cwd)?;
+    let axctl_config = config::load_from_project(&cwd)?;
+
+    // ── 1. 前端根 ──
     let frontend_root: PathBuf = if let Some(dir) = args.dir {
         dir
     } else {
-        let config = crate::config::load_from_project(&cwd)?;
-        config
+        axctl_config
             .frontend_root
             .as_ref()
-            .map(|r| workspace_root.join(r))
-            .unwrap_or(workspace_root.clone())
+            .map(|r| workspace.root.join(r))
+            .unwrap_or_else(|| workspace.root.clone())
     };
-
-    // 校验是前端项目
     if !frontend_root.join("package.json").is_file() {
         anyhow::bail!(
-            "{} has no package.json — build the frontend from its project root, \
+            "{} has no package.json — run `axctl build` from the frontend root, \
              or pass --dir <frontend-root> / configure frontend_root",
             frontend_root.display()
         );
     }
 
+    // ── 2. 前端构建 ──
     logging::info(format!("building frontend in {}", frontend_root.display()));
     vite::run_vite_build(&frontend_root)
         .await
         .context("frontend build failed")?;
-
     logging::success("frontend build complete");
+
+    // ── 3. 写哨兵 ──
+    // dist 目录：vite 默认 build.outDir = <frontend_root>/dist。
+    let dist_dir = frontend_root.join("dist");
+    if !dist_dir.is_dir() {
+        anyhow::bail!("dist not found at {} — did vite build succeed?", dist_dir.display());
+    }
+    let sentinel = dist_dir.join(".axctl-sentinel");
+    let fingerprint = dir_fingerprint(&dist_dir);
+    std::fs::write(&sentinel, format!("{fingerprint}\n"))
+        .with_context(|| format!("failed to write sentinel {}", sentinel.display()))?;
+    logging::success(format!("sentinel written (dist fingerprint {fingerprint})"));
+
+    // ── 4. 后端 release 构建 ──
+    let backend_target = backend::resolve_backend(&workspace, &axctl_config, &cwd)?;
+    logging::info(format!(
+        "building backend release: {} (bin {})",
+        backend_target.package, backend_target.bin
+    ));
+    backend::cargo_build_release(&workspace, &backend_target).await?;
+    let release_bin = backend::release_binary_path(&workspace, &backend_target);
+    logging::success(format!(
+        "backend release build complete: {}",
+        release_bin.display()
+    ));
+
     Ok(())
 }
 
-/// 用 cargo metadata 找 workspace 根。
-fn workspace_root_of(start: &std::path::Path) -> Result<PathBuf> {
-    let meta = cargo_metadata::MetadataCommand::new()
-        .current_dir(start)
-        .no_deps()
-        .exec()
-        .context("failed to run `cargo metadata`")?;
-    Ok(meta.workspace_root.as_std_path().to_path_buf())
+/// 递归计算目录内容指纹（文件名 + 大小 + 修改时间，非内容 hash——
+/// 快且足以区分"产物变了没"；哨兵只需稳定区分变化）。
+///
+/// 哨兵内容 = 此指纹（内容可能相同）+ 调用方追加时间戳（保证每次必变）。
+fn dir_fingerprint(dir: &std::path::Path) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::Hasher;
+
+    let mut hasher = DefaultHasher::new();
+    let mut files: Vec<_> = walk_files(dir);
+    files.sort();
+    for f in files {
+        hasher.write(f.to_string_lossy().as_bytes());
+        if let Ok(meta) = std::fs::metadata(&f) {
+            hasher.write_u64(meta.len());
+            if let Ok(mtime) = meta.modified() {
+                if let Ok(dur) = mtime.duration_since(std::time::UNIX_EPOCH) {
+                    hasher.write_u64(dur.as_nanos() as u64);
+                }
+            }
+        }
+    }
+    format!("{:016x}", hasher.finish())
+}
+
+/// 递归收集目录下所有文件路径。
+fn walk_files(dir: &std::path::Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                out.extend(walk_files(&path));
+            } else {
+                out.push(path);
+            }
+        }
+    }
+    out
 }
