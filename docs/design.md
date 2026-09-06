@@ -445,7 +445,7 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
 
 - [ ] `axctl init`
 - [ ] `axctl package`（对接 cargo-packager）
-- [ ] 自动化集成测试（dev 全链路：启动 → HTTP → 热重启 → 端口释放）
+- [ ] 集成测试 CI 接入（dev_smoke / preview_smoke / build_smoke 骨架已就绪，均 #[ignore] 需 node+vite）
 - [ ] `debug-ws` 调试子命令未来移除或并入 `info`（决策后执行）
 
 ### 已关闭项（历史）
@@ -484,7 +484,8 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
   扩展名启发式回退 + 缓存头分层 + ETag/304；fixture 升级为 axum server
   实测 release HTTP（根/静态/SPA 路由/API 全 200，缺失 fetch 404）。
 - ~~axctl build 未实现~~：完整链路已实现（§6.1）——前端 vite build +
-  哨兵写入（dist 指纹）+ 后端 release 构建；哨兵传导经 reruntest 实证。
+  哨兵写入（dist 指纹）+ 后端 release 构建；哨兵传导经 reruntest 实证，
+ 并有 `crates/axctl/tests/build_smoke.rs` 自动化（#[ignore]，需 node+vite）。
 
 ## 10. 统一日志管道
 
