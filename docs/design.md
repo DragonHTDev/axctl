@@ -427,7 +427,7 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
 ### 未实现功能
 
 - [ ] `axctl init`
-- [ ] `axctl build`（§6.1 链路 + 6.3 哨兵 touch；embed/serve 侧已完成见 §6.2/§6.4）
+- [ ] `axctl build` 后端部分（哨兵 touch + cargo release 构建；**前端 vite build 已完成**——§6.1 链路步骤 1-2）
 - [ ] `axctl package`（对接 cargo-packager）
 - [ ] 自动化集成测试（dev 全链路：启动 → HTTP → 热重启 → 端口释放）
 - [ ] `debug-ws` 调试子命令未来移除或并入 `info`（决策后执行）

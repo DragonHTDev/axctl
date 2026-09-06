@@ -128,6 +128,32 @@ fn open_flag(open: bool) -> &'static str {
     if open { " --open" } else { "" }
 }
 
+/// 跑一次 `vite build`（生产构建），阻塞到完成。
+///
+/// 与 dev/serve 的 spawn 不同：vite build 是一次性任务（非常驻），
+/// 直接等退出码。stdout/stderr 继承——用户要看到 vite 的构建输出与
+/// 产物报告。
+///
+/// 返回前 `vite.config.ts` 的 `build.outDir`（默认 `dist/`）应已产出。
+pub async fn run_vite_build(project_root: &Path) -> Result<()> {
+    let pm = package_manager();
+    let (program, args) = match pm {
+        "pnpm" => ("pnpm", vec!["exec", "vite", "build"]),
+        _ => ("npm", vec!["exec", "vite", "build"]),
+    };
+    // Windows 下 pnpm/npm 是 .cmd shim，须经 cmd /C（spawn_command 的职责）。
+    // 这里复用 ManagedChild::spawn_command 的 Windows 处理，但 build 需要
+    // 等退出，故先 spawn 再 wait。
+    let command = format!("{} {}", program, args.join(" "));
+    let mut child = ManagedChild::spawn_command("vite-build", &command, Some(project_root), &[])?;
+    let status = child.wait().await?;
+    if status.success() {
+        Ok(())
+    } else {
+        anyhow::bail!("vite build failed (exit {:?})", status.code())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

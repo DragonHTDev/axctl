@@ -42,9 +42,9 @@ enum Command {
     /// 开发模式：监听源码变化，自动重编译并重启 server
     #[command(about = "Development mode: watch source changes, rebuild and restart the server automatically")]
     Dev,
-    /// 生产构建：构建前端产物 + cargo release 构建
-    #[command(about = "Production build: build frontend assets + cargo release build")]
-    Build,
+    /// 生产构建：先 vite build 出 dist（后端 release 构建与哨兵后续接入）
+    #[command(about = "Production build: build frontend assets with vite")]
+    Build(commands::build::BuildArgs),
     /// 静态预览：封装 vite preview 服务构建产物（纯前端，无后端）
     #[command(about = "Preview the built frontend via vite preview (static, no backend)")]
     Serve(commands::serve::ServeArgs),
@@ -87,9 +87,12 @@ fn dispatch(command: Command) -> anyhow::Result<()> {
                 .context("failed to build tokio runtime")?;
             rt.block_on(commands::dev::run())
         }
-        Command::Build => {
-            crate::logging::warn("build is not implemented yet");
-            Ok(())
+        Command::Build(args) => {
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .context("failed to build tokio runtime")?;
+            rt.block_on(commands::build::run(args))
         }
         Command::Serve(args) => {
             // serve 需要 Tokio 运行时（vite preview 就绪探测 + Ctrl+C 处理）

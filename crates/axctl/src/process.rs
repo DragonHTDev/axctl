@@ -176,6 +176,13 @@ impl ManagedChild {
     ) -> std::result::Result<Option<std::process::ExitStatus>, std::io::Error> {
         self.child.try_wait()
     }
+
+    /// 等待进程退出，返回退出状态（一次性任务如 `vite build` 用）。
+    ///
+    /// 注意：调用后子进程句柄被回收，不能再 kill_tree / wait。
+    pub async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        self.child.wait().await
+    }
 }
 
 /// 终止 pid 进程树。
