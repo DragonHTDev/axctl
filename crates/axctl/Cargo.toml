@@ -35,3 +35,6 @@ console = "0.15"
 # Unix 进程组终止（kill_tree 用 setpgid + kill(-pgid)）
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"

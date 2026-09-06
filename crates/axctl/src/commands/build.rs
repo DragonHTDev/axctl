@@ -79,18 +79,27 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     ));
     backend::cargo_build_release(&workspace, &backend_target).await?;
     let release_bin = backend::release_binary_path(&workspace, &backend_target);
-    logging::success(format!(
-        "backend release build complete: {}",
-        release_bin.display()
-    ));
+    if release_bin.is_file() {
+        logging::success(format!(
+            "backend release build complete: {}",
+            release_bin.display()
+        ));
+    } else {
+        // 极端情况：cargo 成功但产物缺失（target 被外部清理等）
+        logging::warn(format!(
+            "cargo build succeeded but binary not found at {}",
+            release_bin.display()
+        ));
+    }
 
     Ok(())
 }
 
-/// 递归计算目录内容指纹（文件名 + 大小 + 修改时间，非内容 hash——
-/// 快且足以区分"产物变了没"；哨兵只需稳定区分变化）。
+/// 递归计算目录内容指纹（文件名 + 大小 + mtime 的 hash）。
 ///
-/// 哨兵内容 = 此指纹（内容可能相同）+ 调用方追加时间戳（保证每次必变）。
+/// 含 mtime（纳秒精度）：产物重写即 mtime 变化 → 指纹变化 → 哨兵内容变
+/// → 触发 build.rs 的 rerun-if-changed。产物未变但 mtime 未动时指纹稳定
+/// （确定性），无需外部时间戳。
 fn dir_fingerprint(dir: &std::path::Path) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::Hasher;
@@ -126,4 +135,62 @@ fn walk_files(dir: &std::path::Path) -> Vec<PathBuf> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    /// 建一个临时目录 + 若干文件，返回 (dir, 文件路径列表)。
+    fn make_tree() -> (tempfile::TempDir, Vec<PathBuf>) {
+        let dir = tempfile::tempdir().unwrap();
+        let files = ["a.txt", "sub/b.js", "sub/deep/c.css"];
+        for rel in files {
+            let p = dir.path().join(rel);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, format!("content of {rel}")).unwrap();
+        }
+        let paths = files.iter().map(|f| dir.path().join(f)).collect();
+        (dir, paths)
+    }
+
+    /// 同一目录算两次 → 指纹相同（确定性）。
+    #[test]
+    fn fingerprint_is_stable_for_identical_dir() {
+        let (dir, _) = make_tree();
+        let a = dir_fingerprint(dir.path());
+        let b = dir_fingerprint(dir.path());
+        assert_eq!(a, b);
+    }
+
+    /// 目录里文件内容变化 → 指纹变化。
+    #[test]
+    fn fingerprint_differs_when_content_changes() {
+        let (dir, files) = make_tree();
+        let before = dir_fingerprint(dir.path());
+        fs::write(&files[0], "changed content").unwrap();
+        let after = dir_fingerprint(dir.path());
+        assert_ne!(before, after);
+    }
+
+    /// 新增文件（不改现有内容）→ 指纹也变。
+    #[test]
+    fn fingerprint_differs_when_file_added() {
+        let (dir, _) = make_tree();
+        let before = dir_fingerprint(dir.path());
+        fs::write(dir.path().join("new-file.txt"), "extra").unwrap();
+        let after = dir_fingerprint(dir.path());
+        assert_ne!(before, after);
+    }
+
+    /// 空目录 → 不 panic，返回确定值。
+    #[test]
+    fn fingerprint_empty_dir_is_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir_fingerprint(dir.path());
+        let b = dir_fingerprint(dir.path());
+        assert_eq!(a, b);
+        assert!(!a.is_empty());
+    }
 }

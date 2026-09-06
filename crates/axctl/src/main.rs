@@ -42,8 +42,9 @@ enum Command {
     /// 开发模式：监听源码变化，自动重编译并重启 server
     #[command(about = "Development mode: watch source changes, rebuild and restart the server automatically")]
     Dev,
-    /// 生产构建：先 vite build 出 dist（后端 release 构建与哨兵后续接入）
-    #[command(about = "Production build: build frontend assets with vite")]
+    /// 生产构建：vite build 出 dist → 写 .axctl-sentinel 哨兵 →
+    /// cargo build --release 编译后端（内嵌 dist）
+    #[command(about = "Production build: vite build + sentinel + cargo release")]
     Build(commands::build::BuildArgs),
     /// 静态预览：封装 vite preview 服务构建产物（纯前端，无后端）
     #[command(about = "Preview the built frontend via vite preview (static, no backend)")]
