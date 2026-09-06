@@ -7,5 +7,21 @@
 <body>
   <h1>axctl fixture</h1>
   <p>Hello from Vite!</p>
+
+  <!-- 端到端链路验证：前端 fetch 同源 /api/status（axctl dev 经代理转发，
+       或 release 内嵌时直连后端），把后端响应渲染到页面 -->
+  <p id="backend">fetching /api/status...</p>
+  <script type="module">
+    const el = document.getElementById("backend");
+    (async () => {
+      try {
+        const resp = await fetch("/api/status");
+        const data = await resp.json();
+        el.textContent = `backend ok=${data.ok}, pid=${data.pid}, message=${data.message}`;
+      } catch (err) {
+        el.textContent = `backend fetch failed: ${err}`;
+      }
+    })();
+  </script>
 </body>
 </html>

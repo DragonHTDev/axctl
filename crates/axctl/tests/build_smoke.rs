@@ -60,11 +60,11 @@ fn cargo_build(fixture: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// HTTP GET 返回状态码；失败 None。
-async fn http_status(url: &str) -> Option<u16> {
+/// HTTP GET 返回 body 文本；失败 None。
+async fn http_body(url: &str) -> Option<String> {
     let client = reqwest::Client::new();
     let resp = client.get(url).send().await.ok()?;
-    Some(resp.status().as_u16())
+    resp.text().await.ok()
 }
 
 /// 等端口可连。
@@ -174,10 +174,13 @@ async fn release_embed_serves_frontend() {
 
     // 等 3001 就绪 + HTTP 断言
     assert!(wait_port(3001, Duration::from_secs(15)).await, "release server 未就绪");
-    assert_eq!(http_status("http://127.0.0.1:3001/").await, Some(200), "GET / 应 200");
-    assert_eq!(
-        http_status("http://127.0.0.1:3001/api/status").await,
-        Some(200),
-        "GET /api/status 应 200"
+    // 页面含 fetch 占位（验证内嵌前端确实带 fetch 逻辑被 serve）
+    let page = http_body("http://127.0.0.1:3001/").await.expect("GET / 无 body");
+    assert!(page.contains("id=\"backend\""), "页面应含 backend 挂载点（内嵌前端）");
+    // /api/status 应返回可用 JSON（前端 fetch 的数据源）
+    let status = http_body("http://127.0.0.1:3001/api/status").await.expect("GET /api/status 无 body");
+    assert!(
+        status.contains("\"ok\":true"),
+        "GET /api/status 应含 ok:true，实际: {status}"
     );
 }
