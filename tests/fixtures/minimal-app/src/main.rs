@@ -14,6 +14,11 @@ struct Status {
 
 #[tokio::main]
 async fn main() {
+    // build.rs 编译期注入的构建标记：哨兵传导实证用（每次重编变化）
+    println!(
+        "[axctl-fixture] build stamp = {}",
+        env!("AXCTL_FIXTURE_BUILD_STAMP")
+    );
     // 从环境变量读取监听地址（axctl 传入），默认 127.0.0.1:3001
     let addr: SocketAddr = std::env::var("AXCTL_BACKEND_ADDR")
         .unwrap_or_else(|_| "127.0.0.1:3001".to_string())
@@ -22,7 +27,11 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/status", get(status))
-        .route("/api/hello", get(hello));
+        .route("/api/hello", get(hello))
+        // release：内嵌 dist 服务前端（SPA fallback）；debug：frontend! 空包装
+        .fallback_service(axctl_core::serve::spa(axctl_core::frontend!(
+            "$CARGO_MANIFEST_DIR/dist"
+        )));
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
