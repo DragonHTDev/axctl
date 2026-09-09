@@ -16,6 +16,18 @@ backend_command = "cargo run"
 # 前端构建命令：npm（避开本机 pnpm 的 ignore-builds 策略）
 frontend_build_command = "npm"
 
+# 打包配置（cargo-packager 原生读取）：供 `axctl package` 测试用。
+# 不配 before-packaging-command：axctl package 已在前置步骤构建 release，
+# 再配会与 axctl 的构建重复（见 axctl package 注释）。若需脱离 axctl
+# 独立 `cargo packager --release`，再自行补该 hook。
+[package.metadata.packager]
+product-name = "Axctl Fixture Server"
+identifier = "dev.axctl.fixture-server"
+description = "axctl fixture 服务端（打包测试用）"
+authors = ["axctl"]
+copyright = "Copyright (c) 2026 axctl"
+category = "Utility"
+
 [dependencies]
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
@@ -24,3 +36,7 @@ serde_json = "1"
 console = "0.15"
 axctl-core = { path = "../../../crates/axctl-core" }
 include_dir = "0.7"
+
+# Windows 文件信息嵌入（版本/公司/产品名等）——见 build.rs；非 Windows 无操作
+[build-dependencies]
+winres = "0.1.12"

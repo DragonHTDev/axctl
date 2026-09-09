@@ -20,4 +20,40 @@ fn main() {
         .expect("write build stamp");
     // 让主 crate 能读到 stamp：编译期环境变量
     println!("cargo:rustc-env=AXCTL_FIXTURE_BUILD_STAMP={stamp}");
+
+    // 为 Windows 可执行文件嵌入版本/公司/产品等文件信息（供打包验证）。
+    // 非 Windows 平台无操作。版本号从 Cargo.toml 动态读，避免双份维护。
+    #[cfg(target_os = "windows")]
+    embed_windows_resources();
+}
+
+/// 嵌入 Windows 资源：文件版本、产品、公司、版权等元数据。
+#[cfg(target_os = "windows")]
+fn embed_windows_resources() {
+    let mut resource = winres::WindowsResource::new();
+    let version = parse_version(env!("CARGO_PKG_VERSION"));
+    resource.set("FileVersion", &version);
+    resource.set("ProductVersion", &version);
+    resource.set("FileDescription", "Axctl Fixture Server");
+    resource.set("ProductName", "Axctl Fixture Server");
+    resource.set("CompanyName", "axctl");
+    resource.set("LegalCopyright", "Copyright (c) 2026 axctl");
+    resource
+        .compile()
+        .expect("failed to embed Windows resources");
+}
+
+/// 将 `x.y.z` 规范化为 Windows 的四段 `x,y,z,0` 版本号。
+#[cfg(target_os = "windows")]
+fn parse_version(version: &str) -> String {
+    let mut parts: Vec<String> = version
+        .split('.')
+        .map(|part| part.chars().filter(|c| c.is_ascii_digit()).collect())
+        .filter(|part: &String| !part.is_empty())
+        .collect();
+    while parts.len() < 4 {
+        parts.push("0".to_string());
+    }
+    parts.truncate(4);
+    parts.join(",")
 }
