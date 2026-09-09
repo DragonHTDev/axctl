@@ -49,9 +49,9 @@ enum Command {
     /// 静态预览：封装 vite preview 服务构建产物（纯前端，无后端）
     #[command(about = "Preview the built frontend via vite preview (static, no backend)")]
     Serve(commands::serve::ServeArgs),
-    /// 打包：对接 cargo-packager 生成安装包
-    #[command(about = "Package: generate installers via cargo-packager")]
-    Package,
+    /// 打包：前端构建 + 哨兵 + cargo release + cargo packager
+    #[command(about = "Bundle installers via cargo-packager (builds frontend + backend first)")]
+    Package(commands::package::PackageArgs),
     /// 环境诊断：输出 Rust / 前端 / 系统信息
     #[command(about = "Environment diagnostics: print Rust / frontend / system info")]
     Info,
@@ -103,9 +103,13 @@ fn dispatch(command: Command) -> anyhow::Result<()> {
                 .context("failed to build tokio runtime")?;
             rt.block_on(commands::serve::run(args))
         }
-        Command::Package => {
-            crate::logging::warn("package is not implemented yet");
-            Ok(())
+        Command::Package(args) => {
+            // package 需要 Tokio 运行时（vite build + cargo release + packager 编排）
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .context("failed to build tokio runtime")?;
+            rt.block_on(commands::package::run(args))
         }
         Command::Info => commands::info::run(),
         Command::DebugWs => debug_ws(),

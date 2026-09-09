@@ -6,12 +6,14 @@
 //! 3. 写 `dist/.axctl-sentinel`（哨兵：dist 指纹，含 mtime 故每次构建必变）
 //!    ——让用户 build.rs 的 rerun-if-changed 命中，触发 server 重编内嵌
 //! 4. `cargo build --release -p <backend> --bin <bin>`
+//!
+//! 第 1–3 步抽成 [`resolve_frontend_root`] + [`build_frontend_with_sentinel`]
+//! 供 `axctl package` 复用（同一套"前端新鲜 → 后端重编内嵌"保障）。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::backend;
 use crate::config;
 use crate::logging;
 use crate::vite;
@@ -35,8 +37,50 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     let axctl_config = config::load_from_project(&cwd)?;
 
     // ── 1. 前端根 ──
-    let frontend_root: PathBuf = if let Some(dir) = args.dir {
-        dir
+    let frontend_root = resolve_frontend_root(&workspace, &axctl_config, args.dir.as_deref())?;
+
+    // ── 2–3. 前端构建 + 哨兵 ──
+    build_frontend_with_sentinel(&frontend_root).await?;
+
+    // ── 4. 后端 release 构建 ──
+    let backend_target = crate::backend::resolve_backend(&workspace, &axctl_config, &cwd)?;
+    if let Some(hint) =
+        crate::backend::backend_choice_hint(&workspace, &axctl_config, &backend_target)
+    {
+        logging::warn(hint);
+    }
+    logging::info(format!(
+        "building backend release: {} (bin {})",
+        backend_target.package, backend_target.bin
+    ));
+    crate::backend::cargo_build_release(&workspace, &backend_target).await?;
+    let release_bin = crate::backend::release_binary_path(&workspace, &backend_target);
+    if release_bin.is_file() {
+        logging::success(format!(
+            "backend release build complete: {}",
+            release_bin.display()
+        ));
+    } else {
+        // 极端情况：cargo 成功但产物缺失（target 被外部清理等）
+        logging::warn(format!(
+            "cargo build succeeded but binary not found at {}",
+            release_bin.display()
+        ));
+    }
+
+    Ok(())
+}
+
+/// 解析前端项目根：`--dir` 覆盖 > `frontend_root` 配置 > workspace 根。
+///
+/// 返回前校验目录含 `package.json`，否则给出引导（供 build/package 共用）。
+pub(crate) fn resolve_frontend_root(
+    workspace: &WorkspaceInfo,
+    axctl_config: &config::AxctlConfig,
+    dir_override: Option<&Path>,
+) -> Result<PathBuf> {
+    let frontend_root: PathBuf = if let Some(dir) = dir_override {
+        dir.to_path_buf()
     } else {
         axctl_config
             .frontend_root
@@ -51,15 +95,20 @@ pub async fn run(args: BuildArgs) -> Result<()> {
             frontend_root.display()
         );
     }
+    Ok(frontend_root)
+}
 
-    // ── 2. 前端构建 ──
+/// 构建前端（vite build）并写哨兵文件。
+///
+/// 供 build/package 共用；`axctl package` 内部也先走这里，保证打进
+/// 安装包的 release 二进制内嵌的是最新 dist。
+pub(crate) async fn build_frontend_with_sentinel(frontend_root: &Path) -> Result<()> {
     logging::info(format!("building frontend in {}", frontend_root.display()));
-    vite::run_vite_build(&frontend_root)
+    vite::run_vite_build(frontend_root)
         .await
         .context("frontend build failed")?;
     logging::success("frontend build complete");
 
-    // ── 3. 写哨兵 ──
     // dist 目录：vite 默认 build.outDir = <frontend_root>/dist。
     let dist_dir = frontend_root.join("dist");
     if !dist_dir.is_dir() {
@@ -70,28 +119,6 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     std::fs::write(&sentinel, format!("{fingerprint}\n"))
         .with_context(|| format!("failed to write sentinel {}", sentinel.display()))?;
     logging::success(format!("sentinel written (dist fingerprint {fingerprint})"));
-
-    // ── 4. 后端 release 构建 ──
-    let backend_target = backend::resolve_backend(&workspace, &axctl_config, &cwd)?;
-    logging::info(format!(
-        "building backend release: {} (bin {})",
-        backend_target.package, backend_target.bin
-    ));
-    backend::cargo_build_release(&workspace, &backend_target).await?;
-    let release_bin = backend::release_binary_path(&workspace, &backend_target);
-    if release_bin.is_file() {
-        logging::success(format!(
-            "backend release build complete: {}",
-            release_bin.display()
-        ));
-    } else {
-        // 极端情况：cargo 成功但产物缺失（target 被外部清理等）
-        logging::warn(format!(
-            "cargo build succeeded but binary not found at {}",
-            release_bin.display()
-        ));
-    }
-
     Ok(())
 }
 

@@ -42,7 +42,9 @@ axctl/                     # workspace 根（虚拟 manifest）
 │   │       └── commands/
 │   │           ├── info.rs      # 已实现
 │   │           ├── dev.rs       # 已实现
-│   │           └── serve.rs     # 已实现（封装 vite preview）
+│   │           ├── build.rs     # 已实现（vite build + 哨兵 + cargo release）
+│   │           ├── serve.rs     # 已实现（封装 vite preview）
+│   │           └── package.rs   # 已实现（封装 cargo-packager）
 │   └── axctl-core/        # 库：给用户项目直接依赖，负责内嵌/服务/探测
 │       ├── embed.rs       #   前端内嵌（include_dir + frontend! 宏 + FrontendAssets）——已实现
 │       ├── serve.rs       #   SPA fallback 路由（spa()/缓存头/ETag）——已实现
@@ -74,9 +76,9 @@ dev.rs ──► workspace.rs ──► config.rs（读取 metadata）
 | --- | --- | --- |
 | `init` | 初始化项目（探测环境、生成配置） | 未实现 |
 | `dev` | 开发模式（见 §5） | 已实现 |
-| `build` | 生产构建（见 §6） | 未实现 |
+| `build` | 生产构建（见 §6） | 已实现 |
 | `serve` | 静态预览：封装 vite preview（纯前端，无后端） | 已实现（§11） |
-| `package` | 打包：对接 cargo-packager | 未实现 |
+| `package` | 打包：对接 cargo-packager（见 §7） | 已实现 |
 | `info` | 环境诊断：输出 Rust / 前端 / 系统信息 | 已实现 |
 | `debug-ws` | 打印 workspace 解析结果与 WatchSet（隐藏调试命令） | 已实现 |
 
@@ -433,8 +435,10 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
   建议拆成 `proxy/{mod,http,ws,headers,target}.rs`。
 - **P1-6**：`dev.rs` 编排逻辑过厚（进程生命周期 / 重启状态 / 清理混在一起），
   建议抽 `DevSession`。
-- **P1-7**：WebSocket / HMR 隧道从未实测；`WebSocketUpgrade` 从 clone 的 parts
-  提取 `OnUpgrade` 有侥幸成分；WS 未透传 path_and_query 与 `Sec-WebSocket-Protocol`。
+- **P1-7**：~~WebSocket / HMR 隧道从未实测~~；已修复：`tunnel_ws` 透传
+  path/query + 子协议（ClientRequestBuilder），`vite_handler` 用
+  `requested_protocols`/`protocols` 回选子协议（RFC 6455），新增单测
+  `proxy_ws_tunnel_preserves_protocol_and_path`。
 - **P2**：`ManagedChild` 无 `Drop`，异常路径依赖显式 kill_tree，易漏（vite
   启动后 backend 失败等场景会残留子进程）。
 - **P2**：`vite.rs::package_manager()` 硬编码 pnpm > npm，未读配置的
@@ -444,12 +448,23 @@ workspace.metadata.axctl     （workspace 根的扁平字段）
 ### 未实现功能
 
 - [ ] `axctl init`
-- [ ] `axctl package`（对接 cargo-packager）
 - [ ] 集成测试 CI 接入（dev_smoke / preview_smoke / build_smoke 骨架已就绪，均 #[ignore] 需 node+vite）
 - [ ] `debug-ws` 调试子命令未来移除或并入 `info`（决策后执行）
 
 ### 已关闭项（历史）
 
+- ~~`build` 未实现~~：vite build + 哨兵 + cargo release 全链已实现（§6），
+  含 `dir_fingerprint` 单测 + build_smoke 黑盒冒烟。
+- ~~`package` 未实现~~：封装 cargo-packager 已实现（commands/package.rs），
+  复用 build 前端管线（哨兵保证内嵌最新 dist）、预检 packager 配置、
+  产物扫描收窄到 bundle/ 目录。已端到端实测（fixture minimal-app +
+  winres + packager 配置）：Windows NSIS 安装包产出成功；实测暴露并修复
+  两处编排问题——(1) fixture 的 before-packaging-command 与 axctl 前置
+  release 构建重复 → fixture 移除该 hook；(2) cargo-packager 产物实际落在
+  `target/release/` 根（非 bundle/）→ report_artifacts 改为 profile 根排除
+  裸二进制 + bundle/ 递归双位置探测；另补 fixture build.rs 的 winres
+  Windows 文件信息嵌入（版本/公司/产品，右键属性可验证）。
+- ~~P1-7 WS 隧道未实测~~：见上（已知问题区已标注解决）。
 - ~~监听整个项目根~~：改为 workspace 感知 WatchSet（§5.8）。
 - ~~配置只读 `[package.metadata.axctl]`~~：改为双层 workspace+package（§7.1）。
 - ~~Windows 进程树终止~~：`process::kill_tree`（taskkill /t）已实现。

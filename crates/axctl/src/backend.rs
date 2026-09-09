@@ -55,6 +55,53 @@ pub fn resolve_backend(
     Ok(BackendTarget { package: member.name.clone(), bin })
 }
 
+/// 多 binary workspace 且未显式指定 backend 时，返回一行引导提示。
+///
+/// 供 dev/build/package 在解析出 backend 后打印，让"项目根运行选中了谁"
+/// 一目了然；无歧义或已显式指定时返回 `None`。
+///
+/// 判定"显式指定"见 [`is_backend_explicitly_configured`]；歧义统计为
+/// workspace 内**有 bin target** 的成员数 >1。
+pub fn backend_choice_hint(
+    ws: &WorkspaceInfo,
+    cfg: &AxctlConfig,
+    target: &BackendTarget,
+) -> Option<String> {
+    if is_backend_explicitly_configured(cfg) {
+        return None;
+    }
+    let binary_count = ws
+        .members
+        .iter()
+        .filter(|m| {
+            m.targets
+                .iter()
+                .any(|t| t.kind.iter().any(|k| matches!(k, cargo_metadata::TargetKind::Bin)))
+        })
+        .count();
+    if binary_count > 1 {
+        Some(format!(
+            "workspace has {binary_count} binary crates; selected `{}` for backend. \
+             If not intended, set [workspace.metadata.axctl.dev].backend_package = \"{}\"",
+            target.package, target.package
+        ))
+    } else {
+        None
+    }
+}
+
+/// backend 是否已**显式**指定：`backend_package` 配置，或 `backend_command`
+/// 里带 `-p`/`--bin`（此时选中是用户明确意图，无需歧义提示）。
+pub(crate) fn is_backend_explicitly_configured(cfg: &AxctlConfig) -> bool {
+    if cfg.backend_package.is_some() {
+        return true;
+    }
+    cfg.backend_command
+        .as_ref()
+        .map(|c| parse_package_flag(c).is_some() || parse_bin_flag(c).is_some())
+        .unwrap_or(false)
+}
+
 /// 解析 backend member（4 级优先级，见模块文档）。
 ///
 /// 供本模块 `resolve_backend` 与 watcher 的 WatchSet 计算共用，
@@ -320,5 +367,52 @@ mod tests {
         assert_eq!(parse_bin_flag("cargo run --bin my-server"), Some("my-server".into()));
         assert_eq!(parse_bin_flag("cargo run --bin=my-server"), Some("my-server".into()));
         assert_eq!(parse_bin_flag("cargo run"), None);
+    }
+
+    /// 配置了 backend_package → 视为显式指定，无需歧义提示。
+    #[test]
+    fn explicit_via_backend_package() {
+        let cfg = AxctlConfig {
+            backend_package: Some("my-server".into()),
+            ..Default::default()
+        };
+        assert!(is_backend_explicitly_configured(&cfg));
+    }
+
+    /// backend_command 带 -p / --package → 显式指定。
+    #[test]
+    fn explicit_via_backend_command_package() {
+        let cfg = AxctlConfig {
+            backend_command: Some("cargo run -p my-server".into()),
+            ..Default::default()
+        };
+        assert!(is_backend_explicitly_configured(&cfg));
+        let cfg = AxctlConfig {
+            backend_command: Some("cargo run --package=my-server".into()),
+            ..Default::default()
+        };
+        assert!(is_backend_explicitly_configured(&cfg));
+    }
+
+    /// backend_command 带 --bin → 显式指定。
+    #[test]
+    fn explicit_via_backend_command_bin() {
+        let cfg = AxctlConfig {
+            backend_command: Some("cargo run --bin my-server".into()),
+            ..Default::default()
+        };
+        assert!(is_backend_explicitly_configured(&cfg));
+    }
+
+    /// 无 backend_package、backend_command 也不带 -p/--bin → 未显式指定。
+    #[test]
+    fn not_explicit_when_unconfigured() {
+        let cfg = AxctlConfig {
+            backend_command: Some("cargo run".into()),
+            ..Default::default()
+        };
+        assert!(!is_backend_explicitly_configured(&cfg));
+        let cfg = AxctlConfig::default();
+        assert!(!is_backend_explicitly_configured(&cfg));
     }
 }

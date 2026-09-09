@@ -94,6 +94,9 @@ pub async fn run() -> Result<()> {
     let axctl_config = config::load_from_metadata(&meta, &cwd)?;
     let workspace_root = workspace.root.clone();
     let backend_target = backend::resolve_backend(&workspace, &axctl_config, &cwd)?;
+    if let Some(hint) = backend::backend_choice_hint(&workspace, &axctl_config, &backend_target) {
+        logging::warn(hint);
+    }
 
     logging::info(format!("axctl dev in {}", workspace_root.display()));
 
