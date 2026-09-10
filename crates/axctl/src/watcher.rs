@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use notify_debouncer_full::notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use notify_debouncer_full::{DebounceEventResult, Debouncer, FileIdMap, new_debouncer};
+use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, FileIdMap};
 
 use crate::watch_set::WatchSet;
 
@@ -40,14 +40,11 @@ where
     F: Fn(ChangeBatch) + Send + 'static,
 {
     let (tx, rx) = mpsc::channel::<ChangeBatch>();
-    let ignored_names: HashSet<String> =
-        watch_set.ignored_dir_names.iter().cloned().collect();
+    let ignored_names: HashSet<String> = watch_set.ignored_dir_names.iter().cloned().collect();
     let auto_ignored: Vec<PathBuf> = watch_set.auto_ignored.clone();
 
-    let mut debouncer: Debouncer<RecommendedWatcher, FileIdMap> = new_debouncer(
-        Duration::from_millis(300),
-        None,
-        move |result: DebounceEventResult| {
+    let mut debouncer: Debouncer<RecommendedWatcher, FileIdMap> =
+        new_debouncer(Duration::from_millis(300), None, move |result: DebounceEventResult| {
             if let Ok(events) = result {
                 let paths: Vec<PathBuf> = events
                     .iter()
@@ -59,9 +56,8 @@ where
                     let _ = tx.send(ChangeBatch { paths });
                 }
             }
-        },
-    )
-    .context("failed to create file watcher")?;
+        })
+        .context("failed to create file watcher")?;
 
     // 递归目录：member src/（rust_member）+ extra_watch_dirs（trigger_all）
     for dir in watch_set
@@ -84,9 +80,7 @@ where
                 debouncer
                     .watcher()
                     .watch(parent, RecursiveMode::NonRecursive)
-                    .with_context(|| {
-                        format!("failed to watch parent of {}", file.display())
-                    })?;
+                    .with_context(|| format!("failed to watch parent of {}", file.display()))?;
             }
         }
     }

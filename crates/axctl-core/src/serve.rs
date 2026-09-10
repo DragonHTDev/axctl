@@ -44,12 +44,12 @@
 
 use std::path::PathBuf;
 
-use axum::Router;
 use axum::body::Body;
 use axum::extract::Request;
-use axum::http::{StatusCode, header};
+use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::any;
+use axum::Router;
 
 use crate::embed::{File, FrontendAssets};
 
@@ -66,12 +66,8 @@ where
     // assets 是 Copy（内部是 Option<&Dir>），两个 route 各捕获一份。
     // any() 让所有 method 都进（release 实际只有 GET 有意义，但 fallback
     // 收到非 GET 也应走 404 而非 405）。
-    let root_handler = move |req: Request| {
-        async move { handle_spa(req, &assets).await }
-    };
-    let catchall_handler = move |req: Request| {
-        async move { handle_spa(req, &assets).await }
-    };
+    let root_handler = move |req: Request| async move { handle_spa(req, &assets).await };
+    let catchall_handler = move |req: Request| async move { handle_spa(req, &assets).await };
 
     Router::new()
         .route("/", any(root_handler))
@@ -110,8 +106,7 @@ async fn handle_spa(req: Request, assets: &FrontendAssets<'static>) -> Response 
     //    - 路径**含扩展名**（fetch 的 /data.json、缺失的 /img.png）：
     //      真 404，绝不返回 HTML（否则 fetch 解析崩）。
     //    附加：非 GET 请求不回退（POST /submit 之类不该得 HTML）。
-    let looks_like_navigation = method == axum::http::Method::GET
-        && !has_extension(path);
+    let looks_like_navigation = method == axum::http::Method::GET && !has_extension(path);
 
     if looks_like_navigation {
         if let Some(index) = assets.get_file("index.html") {
@@ -176,7 +171,7 @@ fn serve_file(file: &'static File<'static>, request_headers: &axum::http::Header
 /// 由文件内容算 ETag（不引额外依赖，用 std 的 DefaultHasher 简化——
 /// 只要"内容变 → etag 变"即可，不要求跨进程一致或防碰撞）。
 fn etag_of(contents: &[u8]) -> String {
-    use std::hash::{Hasher, DefaultHasher};
+    use std::hash::{DefaultHasher, Hasher};
     let mut h = DefaultHasher::new();
     h.write(contents);
     format!("\"{:016x}\"", h.finish())
@@ -186,15 +181,14 @@ fn etag_of(contents: &[u8]) -> String {
 mod tests {
     use super::*;
     use axum::body::to_bytes;
-    use axum::http::{Request as HttpRequest, header};
+    use axum::http::{header, Request as HttpRequest};
     use tower::ServiceExt;
 
     /// 用 fixture 的 static/ 构造 embedded assets（测试不依赖 release cfg）。
     fn test_assets() -> FrontendAssets<'static> {
-        static DIR: crate::embed::Dir<'static> =
-            crate::embed::include_dir::include_dir!(
-                "$CARGO_MANIFEST_DIR/../../tests/fixtures/embed-app/static"
-            );
+        static DIR: crate::embed::Dir<'static> = crate::embed::include_dir::include_dir!(
+            "$CARGO_MANIFEST_DIR/../../tests/fixtures/embed-app/static"
+        );
         FrontendAssets::embedded(&DIR)
     }
 
@@ -235,7 +229,10 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(resp.headers()[header::CACHE_CONTROL], "public, max-age=31536000, immutable");
         let ct = resp.headers()[header::CONTENT_TYPE].to_str().unwrap();
-        assert!(ct.starts_with("application/javascript") || ct.starts_with("text/javascript"), "ct={ct}");
+        assert!(
+            ct.starts_with("application/javascript") || ct.starts_with("text/javascript"),
+            "ct={ct}"
+        );
     }
 
     /// SPA 路由（无扩展名路径，如 /some/client/route）未命中 → 回退 index.html。

@@ -75,9 +75,9 @@ fn validate_host(host: &str) -> Result<()> {
     if host.is_empty() {
         anyhow::bail!("host is empty");
     }
-    let ok = host.chars().all(|c| {
-        c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ':' | '[' | ']')
-    });
+    let ok = host
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ':' | '[' | ']'));
     if ok {
         Ok(())
     } else {
@@ -93,11 +93,7 @@ fn validate_host(host: &str) -> Result<()> {
 /// 若调用方已有 `cargo_metadata::Metadata`（如 WorkspaceInfo 已 exec 过），
 /// 请用 [`load_from_metadata`] 避免重复跑 `cargo metadata`。
 pub fn load_from_project(start: &Path) -> Result<AxctlConfig> {
-    match MetadataCommand::new()
-        .current_dir(start)
-        .no_deps()
-        .exec()
-    {
+    match MetadataCommand::new().current_dir(start).no_deps().exec() {
         Ok(meta) => load_from_metadata_impl(&meta, start),
         Err(error) => {
             tracing::debug!(target: "axctl.config", ?error, "cargo metadata failed; falling back to single-package mode");
@@ -116,9 +112,8 @@ fn load_from_metadata_impl(meta: &Metadata, start: &Path) -> Result<AxctlConfig>
     let workspace_root: PathBuf = meta.workspace_root.clone().into();
 
     // 1) workspace metadata
-    let workspace_cfg =
-        read_axctl_section(&workspace_root.join("Cargo.toml"), "workspace")
-            .context("failed to parse workspace Cargo.toml")?;
+    let workspace_cfg = read_axctl_section(&workspace_root.join("Cargo.toml"), "workspace")
+        .context("failed to parse workspace Cargo.toml")?;
 
     // 2) 当前 member metadata
     let member_cfg = match find_current_package(meta, start) {

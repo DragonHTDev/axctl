@@ -23,15 +23,21 @@ use std::time::{Duration, Instant};
 /// fixture 的定位：workspace 根下的 tests/fixtures/minimal-app。
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..").join("..")
-        .join("tests").join("fixtures").join("minimal-app")
+        .join("..")
+        .join("..")
+        .join("tests")
+        .join("fixtures")
+        .join("minimal-app")
 }
 
 /// axctl 二进制路径。
 fn axctl_bin() -> PathBuf {
     let mut bin = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..").join("..")
-        .join("target").join("debug").join("axctl");
+        .join("..")
+        .join("..")
+        .join("target")
+        .join("debug")
+        .join("axctl");
     if cfg!(windows) {
         bin.set_extension("exe");
     }
@@ -65,7 +71,10 @@ async fn http_status(url: &str) -> Option<u16> {
 async fn wait_port(port: u16, timeout: Duration) -> bool {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
-        if tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+        if tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .is_ok()
+        {
             return true;
         }
         tokio::time::sleep(Duration::from_millis(300)).await;
@@ -100,10 +109,7 @@ async fn serve_smoke_static_and_spa() {
     assert_eq!(http_status("http://127.0.0.1:4173/").await, Some(200));
 
     // SPA fallback：假路由也 200（vite preview 回退 index.html）
-    assert_eq!(
-        http_status("http://127.0.0.1:4173/some/spa/route").await,
-        Some(200)
-    );
+    assert_eq!(http_status("http://127.0.0.1:4173/some/spa/route").await, Some(200));
 }
 
 /// 终止 pid 所在进程树（测试清理用；集成测试不便依赖 axctl crate 内部

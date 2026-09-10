@@ -76,9 +76,9 @@ fn version_of(command: &str) -> Option<String> {
 pub fn probe(cwd: Option<&Path>) -> ProbeReport {
     ProbeReport {
         axctl_version: env!("CARGO_PKG_VERSION").to_string(),
-        cwd: cwd.map(Path::to_path_buf).unwrap_or_else(|| {
-            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-        }),
+        cwd: cwd
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))),
         rustc: probe_tool("rustc"),
         cargo: probe_tool("cargo"),
         node: probe_tool("node"),
@@ -93,10 +93,7 @@ pub fn probe(cwd: Option<&Path>) -> ProbeReport {
 /// 探测单个命令的可用性与版本。
 fn probe_tool(name: &str) -> ToolInfo {
     let version = version_of(name);
-    ToolInfo {
-        available: version.is_some(),
-        version,
-    }
+    ToolInfo { available: version.is_some(), version }
 }
 
 /// 判断一个路径是否像 axctl 项目根（存在 `Cargo.toml`）。

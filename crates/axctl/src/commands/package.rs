@@ -169,14 +169,8 @@ async fn run_cargo_packager(args: &PackageArgs, member: &MemberInfo) -> Result<(
         cmd.arg("--out-dir").arg(out_dir);
     }
 
-    logging::info(format!(
-        "running cargo packager in {}",
-        member.root.display()
-    ));
-    let status = cmd
-        .status()
-        .await
-        .context("failed to run cargo packager")?;
+    logging::info(format!("running cargo packager in {}", member.root.display()));
+    let status = cmd.status().await.context("failed to run cargo packager")?;
     if status.success() {
         logging::success("cargo packager finished");
         Ok(())
@@ -358,16 +352,8 @@ mod tests {
     #[test]
     fn packager_config_accepts_standalone_file() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("Cargo.toml"),
-            "[package]\nname = \"demo\"\n",
-        )
-        .unwrap();
-        std::fs::write(
-            dir.path().join("Packager.toml"),
-            "product-name = \"Demo\"\n",
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = \"demo\"\n").unwrap();
+        std::fs::write(dir.path().join("Packager.toml"), "product-name = \"Demo\"\n").unwrap();
         let m = member(dir.path(), "demo");
         assert!(ensure_packager_config(&m).is_ok());
     }
@@ -405,7 +391,10 @@ mod tests {
         // target 别处（非 bundle）的源码包 / 裸可执行，都不该被收集
         std::fs::create_dir_all(dir.path().join("target").join("src-pkgs")).unwrap();
         std::fs::write(
-            dir.path().join("target").join("src-pkgs").join("demo-1.0.0.tar.gz"),
+            dir.path()
+                .join("target")
+                .join("src-pkgs")
+                .join("demo-1.0.0.tar.gz"),
             "x",
         )
         .unwrap();

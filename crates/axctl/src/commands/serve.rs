@@ -70,11 +70,7 @@ pub async fn run(args: ServeArgs) -> Result<()> {
     // 存活再做 TCP 探测。TCP 通了才真 ready（否则可能连上端口占用者）。
     let preview_ref = &mut preview;
     let outcome = wait_ready(&host, port, Duration::from_secs(15), move || {
-        preview_ref
-            .try_wait()
-            .ok()
-            .flatten()
-            .map(|s| s.code())
+        preview_ref.try_wait().ok().flatten().map(|s| s.code())
     })
     .await;
 
@@ -90,7 +86,10 @@ pub async fn run(args: ServeArgs) -> Result<()> {
             anyhow::bail!("vite preview failed to start: {hint}");
         }
         ReadyOutcome::Timeout => {
-            logging::error(format!("vite preview did not become ready within 15s on {}", args.addr));
+            logging::error(format!(
+                "vite preview did not become ready within 15s on {}",
+                args.addr
+            ));
             preview.kill_tree().await;
             anyhow::bail!("vite preview did not become ready within 15s on {}", args.addr);
         }
@@ -206,7 +205,9 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         tokio::spawn(async move {
             loop {
-                let Ok((mut sock, _)) = listener.accept().await else { break };
+                let Ok((mut sock, _)) = listener.accept().await else {
+                    break;
+                };
                 tokio::spawn(async move {
                     use tokio::io::{AsyncReadExt, AsyncWriteExt};
                     let mut buf = [0u8; 1024];
@@ -235,8 +236,7 @@ mod tests {
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             listener.local_addr().unwrap().port()
         };
-        let outcome =
-            wait_ready("127.0.0.1", port, Duration::from_millis(600), || None).await;
+        let outcome = wait_ready("127.0.0.1", port, Duration::from_millis(600), || None).await;
         assert!(matches!(outcome, ReadyOutcome::Timeout));
     }
 
@@ -254,10 +254,7 @@ mod tests {
             }
         });
         // 子进程"已退出"（code=1）→ 应立即 ChildExited
-        let outcome = wait_ready("127.0.0.1", port, Duration::from_secs(2), || {
-            Some(Some(1))
-        })
-        .await;
+        let outcome = wait_ready("127.0.0.1", port, Duration::from_secs(2), || Some(Some(1))).await;
         assert!(
             matches!(outcome, ReadyOutcome::ChildExited(Some(1))),
             "子进程退出应优先判失败, got {outcome:?}"

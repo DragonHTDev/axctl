@@ -8,8 +8,8 @@
 //! 5. 监听"后端依赖闭包"内源码变化 → 重编译重启（代理与 vite 不动）
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -114,9 +114,7 @@ pub async fn run() -> Result<()> {
         let (host, port) = config::parse_addr(url.trim_start_matches("http://"))?;
         vite_host = host;
         vite_port = port;
-        logging::info(format!(
-            "using configured frontend dev url: http://{vite_host}:{vite_port}"
-        ));
+        logging::info(format!("using configured frontend dev url: http://{vite_host}:{vite_port}"));
     }
 
     // 前端工作目录：frontend_root 配置优先，否则 workspace 根
@@ -128,9 +126,7 @@ pub async fn run() -> Result<()> {
 
     let vite_configured = axctl_config.frontend_dev_url.is_some();
     if vite::http_ready(&vite_host, vite_port, Duration::from_millis(800)).await {
-        logging::info(format!(
-            "reusing running vite dev server at http://{vite_host}:{vite_port}"
-        ));
+        logging::info(format!("reusing running vite dev server at http://{vite_host}:{vite_port}"));
     } else if vite_configured {
         // 配置了 devUrl 但尚未就绪：等待用户自行启动的前端（tauri 同款等待）。
         // 注意：不主动拉起——devUrl 语义是"前端由外部管理"。
@@ -147,7 +143,9 @@ pub async fn run() -> Result<()> {
         logging::info("starting vite dev server...");
         vite_child = Some(vite::spawn_vite(&frontend_root).await?);
         if !vite::http_ready(&vite_host, vite_port, Duration::from_secs(15)).await {
-            logging::error(format!("vite dev server did not become ready on {vite_host}:{vite_port}"));
+            logging::error(format!(
+                "vite dev server did not become ready on {vite_host}:{vite_port}"
+            ));
             anyhow::bail!("vite dev server did not become ready on {vite_host}:{vite_port}");
         }
     }
@@ -159,8 +157,7 @@ pub async fn run() -> Result<()> {
         "building backend: {} (bin {})",
         backend_target.package, backend_target.bin
     ));
-    let backend =
-        build_and_start_backend(&workspace, &backend_target, &backend_addr).await?;
+    let backend = build_and_start_backend(&workspace, &backend_target, &backend_addr).await?;
 
     // ── 3. 反向代理 ──
     let proxy_addr = axctl_config.proxy_addr_or();
@@ -182,7 +179,10 @@ pub async fn run() -> Result<()> {
     }
 
     let proxy_router = proxy::build_proxy_router(
-        ProxyTarget { host: DEFAULT_BACKEND_HOST.to_string(), port: backend_port },
+        ProxyTarget {
+            host: DEFAULT_BACKEND_HOST.to_string(),
+            port: backend_port,
+        },
         ProxyTarget { host: vite_host.clone(), port: vite_port },
     );
     let listener = TcpListener::bind((proxy_host.as_str(), proxy_port))
@@ -237,9 +237,10 @@ pub async fn run() -> Result<()> {
             // 事件投递线程同步调用；只过滤是否后端相关，异步重启交给 runtime。
             // extra_watch_dirs 内的变化不过滤（任何文件都触发），
             // 其余（member src/）按 Rust 源码过滤。
-            let changed = batch.paths.iter().any(|p| {
-                watch_set_cb.is_in_trigger_all(p) || is_backend_source(p)
-            });
+            let changed = batch
+                .paths
+                .iter()
+                .any(|p| watch_set_cb.is_in_trigger_all(p) || is_backend_source(p));
             if !changed {
                 return;
             }
@@ -282,12 +283,7 @@ pub async fn run() -> Result<()> {
                     }
                     // 结束后清 PENDING；若期间又有变更置回 PENDING，则补一轮
                     if restart_state
-                        .compare_exchange(
-                            PENDING,
-                            RESTARTING,
-                            Ordering::SeqCst,
-                            Ordering::SeqCst,
-                        )
+                        .compare_exchange(PENDING, RESTARTING, Ordering::SeqCst, Ordering::SeqCst)
                         .is_err()
                     {
                         // 无 pending（是 IDLE 或已被别的轮次抢占）→ 收尾

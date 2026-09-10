@@ -51,9 +51,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use console::style;
 use tracing::field::{Field, Visit};
 use tracing::{Event, Level, Subscriber};
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::{Context, Layer, SubscriberExt};
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 /// 各子系统 target 约定（RUST_LOG 定向过滤用，如 `RUST_LOG=axctl.proxy`）。
 ///
@@ -95,8 +95,7 @@ const EVENT_UI_SUCCESS: &str = "ui.success";
 /// 初始化全局日志管道。必须在任何输出之前调用一次（main 最前）。
 pub fn init() {
     VERBOSE.store(env_is_verbose(), Ordering::SeqCst);
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::registry()
         .with(filter)
@@ -180,15 +179,12 @@ impl<S: Subscriber> Layer<S> for AxctlLayer {
                 Level::DEBUG => style("DEBUG").dim(),
                 Level::TRACE => style("TRACE").dim(),
             };
-            let mut kv: Vec<String> = fields
-                .kv
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
+            let mut kv: Vec<String> = fields.kv.iter().map(|(k, v)| format!("{k}={v}")).collect();
             if let Some(name) = &fields.event_name {
                 kv.push(format!("event={name}"));
             }
-            let mut line = format!("{level_word} {}: {}", event.metadata().target(), fields.message);
+            let mut line =
+                format!("{level_word} {}: {}", event.metadata().target(), fields.message);
             if !kv.is_empty() {
                 line.push(' ');
                 line.push_str(&kv.join(" "));

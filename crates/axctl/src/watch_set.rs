@@ -44,11 +44,7 @@ impl WatchSet {
     /// 3. 对闭包内每个 member：监听 src/ + Cargo.toml + build.rs
     /// 4. extra_watch_dirs（相对 workspace root）追加到 trigger_all_dirs
     /// 5. ignored 兜底
-    pub fn from_config(
-        ws: &WorkspaceInfo,
-        cfg: &AxctlConfig,
-        start_dir: &Path,
-    ) -> Result<Self> {
+    pub fn from_config(ws: &WorkspaceInfo, cfg: &AxctlConfig, start_dir: &Path) -> Result<Self> {
         let backend = backend::resolve_backend_member(ws, cfg, start_dir).ok_or_else(|| {
             anyhow!(
                 "cannot determine backend package: configure either\n  \
@@ -124,12 +120,10 @@ fn add_member_to_watch_set(set: &mut WatchSet, member: &MemberInfo) {
 }
 
 fn default_ignored_names() -> Vec<String> {
-    [
-        "target", "node_modules", ".git", "dist", ".axctl",
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect()
+    ["target", "node_modules", ".git", "dist", ".axctl"]
+        .into_iter()
+        .map(String::from)
+        .collect()
 }
 
 #[cfg(test)]

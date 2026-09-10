@@ -56,10 +56,7 @@ pub async fn run(args: BuildArgs) -> Result<()> {
     crate::backend::cargo_build_release(&workspace, &backend_target).await?;
     let release_bin = crate::backend::release_binary_path(&workspace, &backend_target);
     if release_bin.is_file() {
-        logging::success(format!(
-            "backend release build complete: {}",
-            release_bin.display()
-        ));
+        logging::success(format!("backend release build complete: {}", release_bin.display()));
     } else {
         // 极端情况：cargo 成功但产物缺失（target 被外部清理等）
         logging::warn(format!(

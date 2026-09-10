@@ -26,8 +26,11 @@ use std::time::{Duration, Instant};
 /// minimal-app fixture 目录（workspace 根下）。
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..").join("..")
-        .join("tests").join("fixtures").join("minimal-app")
+        .join("..")
+        .join("..")
+        .join("tests")
+        .join("fixtures")
+        .join("minimal-app")
 }
 
 /// 递归找 build-stamp.txt（target/debug/build/*/out/build-stamp.txt）。
@@ -71,7 +74,10 @@ async fn http_body(url: &str) -> Option<String> {
 async fn wait_port(port: u16, timeout: Duration) -> bool {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
-        if tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+        if tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .is_ok()
+        {
             return true;
         }
         tokio::time::sleep(Duration::from_millis(300)).await;
@@ -148,7 +154,10 @@ async fn release_embed_serves_frontend() {
     assert!(release_ok, "cargo build --release 失败");
 
     // 起 release exe（默认 3001）
-    let exe = fixture.join("target").join("release").join("axctl-fixture-server");
+    let exe = fixture
+        .join("target")
+        .join("release")
+        .join("axctl-fixture-server");
     let mut exe = exe;
     if cfg!(windows) {
         exe.set_extension("exe");
@@ -175,12 +184,13 @@ async fn release_embed_serves_frontend() {
     // 等 3001 就绪 + HTTP 断言
     assert!(wait_port(3001, Duration::from_secs(15)).await, "release server 未就绪");
     // 页面含 fetch 占位（验证内嵌前端确实带 fetch 逻辑被 serve）
-    let page = http_body("http://127.0.0.1:3001/").await.expect("GET / 无 body");
+    let page = http_body("http://127.0.0.1:3001/")
+        .await
+        .expect("GET / 无 body");
     assert!(page.contains("id=\"backend\""), "页面应含 backend 挂载点（内嵌前端）");
     // /api/status 应返回可用 JSON（前端 fetch 的数据源）
-    let status = http_body("http://127.0.0.1:3001/api/status").await.expect("GET /api/status 无 body");
-    assert!(
-        status.contains("\"ok\":true"),
-        "GET /api/status 应含 ok:true，实际: {status}"
-    );
+    let status = http_body("http://127.0.0.1:3001/api/status")
+        .await
+        .expect("GET /api/status 无 body");
+    assert!(status.contains("\"ok\":true"), "GET /api/status 应含 ok:true，实际: {status}");
 }

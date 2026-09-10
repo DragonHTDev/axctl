@@ -144,7 +144,9 @@ mod tests {
     #[test]
     fn get_file_recurses_into_subdir() {
         let dir = fixture_dir();
-        let app_js = dir.get_file("assets/app.js").expect("assets/app.js 应可递归找到");
+        let app_js = dir
+            .get_file("assets/app.js")
+            .expect("assets/app.js 应可递归找到");
         assert!(
             String::from_utf8_lossy(app_js.contents()).contains("console.log"),
             "app.js 内容不符"

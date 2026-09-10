@@ -74,9 +74,11 @@ pub fn backend_choice_hint(
         .members
         .iter()
         .filter(|m| {
-            m.targets
-                .iter()
-                .any(|t| t.kind.iter().any(|k| matches!(k, cargo_metadata::TargetKind::Bin)))
+            m.targets.iter().any(|t| {
+                t.kind
+                    .iter()
+                    .any(|k| matches!(k, cargo_metadata::TargetKind::Bin))
+            })
         })
         .count();
     if binary_count > 1 {
@@ -180,7 +182,11 @@ fn resolve_bin_name(member: &MemberInfo, cfg: &AxctlConfig) -> Result<String> {
     let all_bins: Vec<String> = member
         .targets
         .iter()
-        .filter(|t| t.kind.iter().any(|k| matches!(k, cargo_metadata::TargetKind::Bin)))
+        .filter(|t| {
+            t.kind
+                .iter()
+                .any(|k| matches!(k, cargo_metadata::TargetKind::Bin))
+        })
         .map(|t| t.name.clone())
         .collect();
 
@@ -251,11 +257,7 @@ async fn cargo_build_profile(
     if status.success() {
         Ok(())
     } else {
-        bail!(
-            "cargo build failed for {} (exit {:?})",
-            target.package,
-            status.code()
-        )
+        bail!("cargo build failed for {} (exit {:?})", target.package, status.code())
     }
 }
 
@@ -285,7 +287,10 @@ pub fn parse_package_flag(cmd: &str) -> Option<String> {
         if p == "-p" || p == "--package" {
             return parts.next().map(|s| s.to_string());
         }
-        if let Some(rest) = p.strip_prefix("-p=").or_else(|| p.strip_prefix("--package=")) {
+        if let Some(rest) = p
+            .strip_prefix("-p=")
+            .or_else(|| p.strip_prefix("--package="))
+        {
             return Some(rest.to_string());
         }
     }

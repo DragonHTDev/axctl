@@ -21,15 +21,21 @@ use std::time::{Duration, Instant};
 /// CARGO_MANIFEST_DIR = crates/axctl，fixture 在 ../../tests/fixtures/minimal-app。
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..").join("..")
-        .join("tests").join("fixtures").join("minimal-app")
+        .join("..")
+        .join("..")
+        .join("tests")
+        .join("fixtures")
+        .join("minimal-app")
 }
 
 /// axctl 二进制路径：workspace target/debug/axctl(.exe)。
 fn axctl_bin() -> PathBuf {
     let mut bin = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..").join("..")
-        .join("target").join("debug").join("axctl");
+        .join("..")
+        .join("..")
+        .join("target")
+        .join("debug")
+        .join("axctl");
     if cfg!(windows) {
         bin.set_extension("exe");
     }

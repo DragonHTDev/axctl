@@ -83,8 +83,7 @@ impl WorkspaceInfo {
             let root_canon = normalize_path(root.canonicalize().unwrap_or(root));
 
             // 从 resolve.nodes 解析 path 依赖（normal + build，排除 dev）
-            let path_dep_ids =
-                collect_path_dep_ids(meta, &pkg.id, &workspace_ids);
+            let path_dep_ids = collect_path_dep_ids(meta, &pkg.id, &workspace_ids);
 
             by_id.insert(pkg.id.clone(), idx);
 
@@ -98,7 +97,12 @@ impl WorkspaceInfo {
             });
         }
 
-        Ok(Self { root: workspace_root, target_dir, members, by_id })
+        Ok(Self {
+            root: workspace_root,
+            target_dir,
+            members,
+            by_id,
+        })
     }
 
     /// 用目录找所属 member（最长前缀匹配）。
@@ -122,7 +126,9 @@ impl WorkspaceInfo {
     pub fn package_for_bin(&self, bin_name: &str) -> Option<&MemberInfo> {
         self.members.iter().find(|m| {
             m.targets.iter().any(|t| {
-                t.kind.iter().any(|k| matches!(k, cargo_metadata::TargetKind::Bin))
+                t.kind
+                    .iter()
+                    .any(|k| matches!(k, cargo_metadata::TargetKind::Bin))
                     && t.name == bin_name
             })
         })
@@ -134,7 +140,9 @@ impl WorkspaceInfo {
     pub fn dependency_closure(&self, start_pkg: &PackageId) -> Vec<&MemberInfo> {
         // 先从 PackageId 找成员下标
         let start_idx = self.by_id.get(start_pkg).copied();
-        let Some(start_idx) = start_idx else { return Vec::new() };
+        let Some(start_idx) = start_idx else {
+            return Vec::new();
+        };
 
         let mut visited: HashSet<usize> = HashSet::new();
         let mut queue: VecDeque<usize> = VecDeque::new();
@@ -164,7 +172,9 @@ fn collect_path_dep_ids(
     pkg_id: &PackageId,
     workspace_ids: &HashSet<&PackageId>,
 ) -> Vec<PackageId> {
-    let Some(resolve) = &meta.resolve else { return Vec::new() };
+    let Some(resolve) = &meta.resolve else {
+        return Vec::new();
+    };
     let Some(node) = resolve.nodes.iter().find(|n| &n.id == pkg_id) else {
         return Vec::new();
     };
@@ -176,8 +186,7 @@ fn collect_path_dep_ids(
             dep.dep_kinds.iter().any(|k| {
                 matches!(
                     k.kind,
-                    cargo_metadata::DependencyKind::Normal
-                        | cargo_metadata::DependencyKind::Build
+                    cargo_metadata::DependencyKind::Normal | cargo_metadata::DependencyKind::Build
                 )
             })
         })

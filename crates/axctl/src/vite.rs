@@ -117,15 +117,25 @@ pub async fn spawn_vite_preview(
     // --no-install：本地 node_modules 没有 vite 时立即报错（与文档一致），
     // 不让 npx 联网静默装包。
     let command = match pm {
-        "pnpm" => format!("pnpm exec vite preview --host {host} --port {port} --strictPort{}", open_flag(open)),
-        _ => format!("npx --no-install vite preview --host {host} --port {port} --strictPort{}", open_flag(open)),
+        "pnpm" => format!(
+            "pnpm exec vite preview --host {host} --port {port} --strictPort{}",
+            open_flag(open)
+        ),
+        _ => format!(
+            "npx --no-install vite preview --host {host} --port {port} --strictPort{}",
+            open_flag(open)
+        ),
     };
     ManagedChild::spawn_command("vite-preview", &command, Some(project_root), &[])
 }
 
 /// `open` → " --open"，否则空串。
 fn open_flag(open: bool) -> &'static str {
-    if open { " --open" } else { "" }
+    if open {
+        " --open"
+    } else {
+        ""
+    }
 }
 
 /// 跑一次 `vite build`（生产构建），阻塞到完成。
@@ -164,4 +174,3 @@ mod tests {
         assert_eq!(open_flag(false), "");
     }
 }
-

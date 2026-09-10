@@ -40,7 +40,9 @@ enum Command {
     #[command(about = "Initialize a project (detect environment, generate config)")]
     Init,
     /// 开发模式：监听源码变化，自动重编译并重启 server
-    #[command(about = "Development mode: watch source changes, rebuild and restart the server automatically")]
+    #[command(
+        about = "Development mode: watch source changes, rebuild and restart the server automatically"
+    )]
     Dev,
     /// 生产构建：vite build 出 dist → 写 .axctl-sentinel 哨兵 →
     /// cargo build --release 编译后端（内嵌 dist）
@@ -56,7 +58,10 @@ enum Command {
     #[command(about = "Environment diagnostics: print Rust / frontend / system info")]
     Info,
     /// 调试：打印 workspace 解析结果与监听集合（隐藏，不进 help）
-    #[command(about = "Debug: print workspace info and computed watch set (hidden)", hide = true)]
+    #[command(
+        about = "Debug: print workspace info and computed watch set (hidden)",
+        hide = true
+    )]
     DebugWs,
 }
 
@@ -130,7 +135,11 @@ fn debug_ws() -> anyhow::Result<()> {
         let bins: Vec<&str> = m
             .targets
             .iter()
-            .filter(|t| t.kind.iter().any(|k| matches!(k, cargo_metadata::TargetKind::Bin)))
+            .filter(|t| {
+                t.kind
+                    .iter()
+                    .any(|k| matches!(k, cargo_metadata::TargetKind::Bin))
+            })
             .map(|t| t.name.as_str())
             .collect();
         let dep_names: Vec<&str> = m

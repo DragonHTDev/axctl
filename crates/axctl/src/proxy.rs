@@ -20,16 +20,16 @@
 
 use std::sync::Arc;
 
-use axum::Router;
+use axum::extract::ws::{Message, WebSocketUpgrade};
 use axum::extract::FromRequestParts;
 use axum::extract::State;
-use axum::extract::ws::{Message, WebSocketUpgrade};
 use axum::http::{Request, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::any;
+use axum::Router;
 use futures_util::{SinkExt, StreamExt};
 use reqwest::redirect::Policy;
-use tokio_tungstenite::tungstenite::{ClientRequestBuilder, http::Uri};
+use tokio_tungstenite::tungstenite::{http::Uri, ClientRequestBuilder};
 
 /// 代理后端目标的连接配置。
 #[derive(Clone)]
@@ -103,15 +103,16 @@ async fn api_http_handler(
 ///
 /// 带 `Upgrade: websocket` → 手动提取 `WebSocketUpgrade` 做隧道；
 /// 普通请求 → HTTP 转发到 vite。
-async fn vite_handler(
-    State(state): State<ProxyState>,
-    req: Request<axum::body::Body>,
-) -> Response {
+async fn vite_handler(State(state): State<ProxyState>, req: Request<axum::body::Body>) -> Response {
     // 判断是否 WS 升级请求
     let is_ws = req
         .headers()
         .get("upgrade")
-        .map(|v| v.to_str().map(|s| s.eq_ignore_ascii_case("websocket")).unwrap_or(false))
+        .map(|v| {
+            v.to_str()
+                .map(|s| s.eq_ignore_ascii_case("websocket"))
+                .unwrap_or(false)
+        })
         .unwrap_or(false);
 
     if is_ws {
@@ -166,17 +167,14 @@ async fn tunnel_ws(
     path_query: String,
     subprotocol: Option<String>,
 ) {
-    let uri: Uri = format!(
-        "ws://{}:{}{}",
-        target.host, target.port, path_query
-    )
-    .parse()
-    .unwrap_or_else(|_| {
-        // 路径/query 含非法字符等极端情况：退化为裸连接
-        format!("ws://{}:{}", target.host, target.port)
-            .parse()
-            .expect("invalid fallback ws uri")
-    });
+    let uri: Uri = format!("ws://{}:{}{}", target.host, target.port, path_query)
+        .parse()
+        .unwrap_or_else(|_| {
+            // 路径/query 含非法字符等极端情况：退化为裸连接
+            format!("ws://{}:{}", target.host, target.port)
+                .parse()
+                .expect("invalid fallback ws uri")
+        });
 
     // 用带请求头的 client 请求（透传子协议）；vite 服务端只在子协议命中
     // HMR_HEADER("vite-hmr") 时才 handleUpgrade，缺了它握手永不完成。
@@ -198,7 +196,9 @@ async fn tunnel_ws(
             let (mut vite_tx, mut vite_rx) = vite_ws.split();
             let to_vite = async {
                 while let Some(Ok(msg)) = browser_rx.next().await {
-                    let Some(vite_msg) = axum_to_tungstenite(msg) else { break };
+                    let Some(vite_msg) = axum_to_tungstenite(msg) else {
+                        break;
+                    };
                     if vite_tx.send(vite_msg).await.is_err() {
                         break;
                     }
@@ -206,7 +206,9 @@ async fn tunnel_ws(
             };
             let to_browser = async {
                 while let Some(Ok(msg)) = vite_rx.next().await {
-                    let Some(browser_msg) = tungstenite_to_axum(msg) else { break };
+                    let Some(browser_msg) = tungstenite_to_axum(msg) else {
+                        break;
+                    };
                     if browser_tx.send(browser_msg).await.is_err() {
                         break;
                     }
@@ -326,9 +328,7 @@ mod tests {
     /// - `/target` → 200 "landed"
     async fn spawn_test_server() -> (String, ProxyTarget) {
         let app = Router::new()
-            .route("/redirect", axum::routing::get(|| async {
-                Redirect::temporary("/target")
-            }))
+            .route("/redirect", axum::routing::get(|| async { Redirect::temporary("/target") }))
             .route("/target", axum::routing::get(|| async { "landed" }));
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -359,7 +359,9 @@ mod tests {
         let resp = proxy_http(&client, req, &target).await;
         assert!(resp.status().is_redirection(), "30x 应原样透传, got {}", resp.status());
         assert_eq!(
-            resp.headers().get(header::LOCATION).map(|v| v.to_str().unwrap()),
+            resp.headers()
+                .get(header::LOCATION)
+                .map(|v| v.to_str().unwrap()),
             Some("/target"),
             "Location 头应保留"
         );
@@ -378,7 +380,9 @@ mod tests {
 
         let resp = proxy_http(&client, req, &target).await;
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         assert_eq!(&body[..], b"landed");
     }
 
@@ -393,12 +397,15 @@ mod tests {
     async fn proxy_ws_tunnel_preserves_protocol_and_path() {
         // 1. 起一个模拟 vite HMR 的上游：接受 vite-hmr 子协议的 WS，echo 文本。
         async fn ws_echo_handler(ws: WebSocketUpgrade) -> impl axum::response::IntoResponse {
-            ws.protocols(["vite-hmr"]).on_upgrade(move |mut socket| async move {
-                use axum::extract::ws::Message as AxMsg;
-                while let Some(Ok(AxMsg::Text(t))) = socket.recv().await {
-                    let _ = socket.send(AxMsg::Text(format!("echo:{}", t.as_str()).into())).await;
-                }
-            })
+            ws.protocols(["vite-hmr"])
+                .on_upgrade(move |mut socket| async move {
+                    use axum::extract::ws::Message as AxMsg;
+                    while let Some(Ok(AxMsg::Text(t))) = socket.recv().await {
+                        let _ = socket
+                            .send(AxMsg::Text(format!("echo:{}", t.as_str()).into()))
+                            .await;
+                    }
+                })
         }
         let upstream_app = Router::new().route("/", axum::routing::get(ws_echo_handler));
         let up_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -406,7 +413,10 @@ mod tests {
         tokio::spawn(async move {
             axum::serve(up_listener, upstream_app).await.unwrap();
         });
-        let upstream = ProxyTarget { host: up_addr.ip().to_string(), port: up_addr.port() };
+        let upstream = ProxyTarget {
+            host: up_addr.ip().to_string(),
+            port: up_addr.port(),
+        };
         // 另一个不重要的 HTTP 目标（proxy 路由需要两个 target）
         let dummy = ProxyTarget { host: "127.0.0.1".to_string(), port: 1 };
 
@@ -421,18 +431,25 @@ mod tests {
 
         // 3. 用 tungstenite client 连 proxy，带子协议 vite-hmr
         use tokio_tungstenite::tungstenite::ClientRequestBuilder;
-        let builder = ClientRequestBuilder::new(proxy_ws.parse().unwrap())
-            .with_sub_protocol("vite-hmr");
-        let (mut ws, resp) = tokio_tungstenite::connect_async(builder).await.expect("握手应成功");
+        let builder =
+            ClientRequestBuilder::new(proxy_ws.parse().unwrap()).with_sub_protocol("vite-hmr");
+        let (mut ws, resp) = tokio_tungstenite::connect_async(builder)
+            .await
+            .expect("握手应成功");
 
         // 断言上游回选的子协议被透传给浏览器侧客户端
-        let selected = resp.headers().get("sec-websocket-protocol").map(|v| v.to_str().unwrap().to_string());
+        let selected = resp
+            .headers()
+            .get("sec-websocket-protocol")
+            .map(|v| v.to_str().unwrap().to_string());
         assert_eq!(selected, Some("vite-hmr".into()), "应回选 vite-hmr 子协议");
 
         // 断言消息往返（token 经 path/query 透传后上游正常 echo）
         use futures_util::SinkExt;
         use futures_util::StreamExt;
-        ws.send(tokio_tungstenite::tungstenite::Message::Text("ping".into())).await.unwrap();
+        ws.send(tokio_tungstenite::tungstenite::Message::Text("ping".into()))
+            .await
+            .unwrap();
         if let Some(Ok(tokio_tungstenite::tungstenite::Message::Text(reply))) = ws.next().await {
             assert_eq!(reply, "echo:ping", "echo 应往返成功");
         } else {

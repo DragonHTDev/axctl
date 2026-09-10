@@ -100,7 +100,9 @@ impl ManagedChild {
         #[cfg(windows)]
         cmd.creation_flags(CREATE_NEW_PROCESS_GROUP);
 
-        let child = cmd.spawn().with_context(|| format!("failed to spawn {name} ({program})"))?;
+        let child = cmd
+            .spawn()
+            .with_context(|| format!("failed to spawn {name} ({program})"))?;
         tracing::debug!(
             target: "axctl.process",
             name,
@@ -142,7 +144,10 @@ impl ManagedChild {
         if self.child.id().is_none() {
             return;
         }
-        let pid = self.child.id().expect("child id should be set while running");
+        let pid = self
+            .child
+            .id()
+            .expect("child id should be set while running");
         let result = kill_process_tree(pid).await;
         match result {
             Ok(()) => tracing::debug!(
@@ -204,9 +209,7 @@ async fn kill_process_tree(pid: u32) -> std::result::Result<(), std::io::Error> 
             // 后者在 Ctrl+C 竞态里常见（控制台已先杀掉部分子进程），
             // 目标已死正是想要的结果，不算失败。
             Some(0) | Some(128) => Ok(()),
-            code => Err(std::io::Error::other(format!(
-                "taskkill exited with {code:?}"
-            ))),
+            code => Err(std::io::Error::other(format!("taskkill exited with {code:?}"))),
         }
     }
 
@@ -299,9 +302,8 @@ fn process_exists(pid: u32) -> bool {
 pub async fn shutdown_signal() {
     #[cfg(unix)]
     {
-        let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .expect("failed to install SIGTERM handler");
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler");
         sigterm.recv().await;
     }
     #[cfg(not(unix))]
@@ -329,10 +331,7 @@ mod tests {
             split_command(r#"cargo run --bin "my server""#),
             vec!["cargo", "run", "--bin", "my server"]
         );
-        assert_eq!(
-            split_command("node 'a b.js' arg"),
-            vec!["node", "a b.js", "arg"]
-        );
+        assert_eq!(split_command("node 'a b.js' arg"), vec!["node", "a b.js", "arg"]);
     }
 
     #[test]
