@@ -215,9 +215,93 @@ pub(crate) fn normalize_path(p: PathBuf) -> PathBuf {
     p
 }
 
+/// 测试专用构造：由给定成员构造 [`WorkspaceInfo`]（自动填充 `by_id` 索引）。
+#[cfg(test)]
+impl WorkspaceInfo {
+    pub(crate) fn from_members_for_test(
+        root: PathBuf,
+        target_dir: PathBuf,
+        members: Vec<MemberInfo>,
+    ) -> Self {
+        let by_id = members
+            .iter()
+            .enumerate()
+            .map(|(i, m)| (m.package_id.clone(), i))
+            .collect();
+        Self { root, target_dir, members, by_id }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 构造一个测试用 member（无 targets，仅用于闭包计算）。
+    fn test_member(name: &str, deps: &[&str]) -> MemberInfo {
+        MemberInfo {
+            package_id: PackageId { repr: name.to_string() },
+            name: name.to_string(),
+            root: PathBuf::from(format!("/proj/{name}")),
+            manifest_path: PathBuf::from(format!("/proj/{name}/Cargo.toml")),
+            targets: vec![],
+            path_dep_ids: deps
+                .iter()
+                .map(|d| PackageId { repr: (*d).to_string() })
+                .collect(),
+        }
+    }
+
+    /// 闭包含自身，且菱形依赖只出现一次（BFS + visited 去重）。
+    #[test]
+    fn dependency_closure_includes_self_and_dedups_diamond() {
+        // a -> b, c; b -> d; c -> d
+        let ws = WorkspaceInfo::from_members_for_test(
+            PathBuf::from("/proj"),
+            PathBuf::from("/proj/target"),
+            vec![
+                test_member("a", &["b", "c"]),
+                test_member("b", &["d"]),
+                test_member("c", &["d"]),
+                test_member("d", &[]),
+            ],
+        );
+        let mut names: Vec<&str> = ws
+            .dependency_closure(&PackageId { repr: "a".into() })
+            .iter()
+            .map(|m| m.name.as_str())
+            .collect();
+        names.sort();
+        assert_eq!(names, vec!["a", "b", "c", "d"], "含自身且 d 只出现一次");
+    }
+
+    /// 起点不在 workspace → 空闭包（不 panic）。
+    #[test]
+    fn dependency_closure_unknown_start_is_empty() {
+        let ws = WorkspaceInfo::from_members_for_test(
+            PathBuf::from("/proj"),
+            PathBuf::from("/proj/target"),
+            vec![test_member("a", &[])],
+        );
+        assert!(ws
+            .dependency_closure(&PackageId { repr: "missing".into() })
+            .is_empty());
+    }
+
+    /// path_dep_ids 含 workspace 外依赖 → 忽略而非 panic。
+    #[test]
+    fn dependency_closure_ignores_non_member_deps() {
+        let ws = WorkspaceInfo::from_members_for_test(
+            PathBuf::from("/proj"),
+            PathBuf::from("/proj/target"),
+            vec![test_member("a", &["external-crate"])],
+        );
+        let names: Vec<&str> = ws
+            .dependency_closure(&PackageId { repr: "a".into() })
+            .iter()
+            .map(|m| m.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["a"]);
+    }
 
     #[test]
     fn normalize_plain_path_unchanged() {

@@ -149,4 +149,89 @@ mod tests {
         // extra 目录外不触发
         assert!(!set.is_in_trigger_all(Path::new("/proj/other/file.txt")));
     }
+
+    /// 构造一个落在 `root/<name>`、含指定 workspace 内依赖的 member。
+    fn member_at(root: &Path, name: &str, deps: &[&str]) -> MemberInfo {
+        MemberInfo {
+            package_id: cargo_metadata::PackageId { repr: name.to_string() },
+            name: name.to_string(),
+            root: root.join(name),
+            manifest_path: root.join(name).join("Cargo.toml"),
+            targets: vec![],
+            path_dep_ids: deps
+                .iter()
+                .map(|d| cargo_metadata::PackageId { repr: (*d).to_string() })
+                .collect(),
+        }
+    }
+
+    /// from_config：按 backend path 闭包收集 src/ 与 Cargo.toml，
+    /// 并把存在的 extra_watch_dirs 纳入 trigger_all_dirs。
+    #[test]
+    fn from_config_collects_closure_and_extra_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        for name in ["a", "b"] {
+            std::fs::create_dir_all(root.join(name).join("src")).unwrap();
+            std::fs::write(root.join(name).join("Cargo.toml"), "").unwrap();
+        }
+        std::fs::create_dir_all(root.join("templates")).unwrap();
+
+        let ws = WorkspaceInfo::from_members_for_test(
+            root.to_path_buf(),
+            root.join("target"),
+            vec![member_at(root, "a", &["b"]), member_at(root, "b", &[])],
+        );
+        let cfg = AxctlConfig {
+            backend_package: Some("a".into()),
+            extra_watch_dirs: vec!["templates".into()],
+            ..Default::default()
+        };
+
+        let set = WatchSet::from_config(&ws, &cfg, root).unwrap();
+
+        // 闭包 a（backend）+ b（其依赖）的 src 与 Cargo.toml 均被监听
+        assert!(set.recursive_dirs.contains(&root.join("a").join("src")));
+        assert!(set.recursive_dirs.contains(&root.join("b").join("src")));
+        assert!(set.files.contains(&root.join("a").join("Cargo.toml")));
+        assert!(set.files.contains(&root.join("b").join("Cargo.toml")));
+        // extra_watch_dirs 命中存在目录 → trigger_all
+        assert_eq!(set.trigger_all_dirs, vec![root.join("templates")]);
+        // target_dir 进 auto_ignored
+        assert!(set.auto_ignored.contains(&root.join("target")));
+    }
+
+    /// from_config：extra_watch_dirs 指向不存在的目录 → 跳过而非报错。
+    #[test]
+    fn from_config_skips_missing_extra_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("a").join("src")).unwrap();
+        std::fs::write(root.join("a").join("Cargo.toml"), "").unwrap();
+
+        let ws = WorkspaceInfo::from_members_for_test(
+            root.to_path_buf(),
+            root.join("target"),
+            vec![member_at(root, "a", &[])],
+        );
+        let cfg = AxctlConfig {
+            backend_package: Some("a".into()),
+            extra_watch_dirs: vec!["nope".into()],
+            ..Default::default()
+        };
+
+        let set = WatchSet::from_config(&ws, &cfg, root).unwrap();
+        assert!(set.trigger_all_dirs.is_empty());
+    }
+
+    /// from_config：无法解析 backend（无配置、无唯一 bin）→ 报错并给引导。
+    #[test]
+    fn from_config_errors_without_backend() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let ws =
+            WorkspaceInfo::from_members_for_test(root.to_path_buf(), root.join("target"), vec![]);
+        let err = WatchSet::from_config(&ws, &AxctlConfig::default(), root).unwrap_err();
+        assert!(format!("{err:#}").contains("cannot determine backend package"));
+    }
 }
