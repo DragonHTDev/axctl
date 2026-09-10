@@ -38,6 +38,33 @@ fn is_backend_source(path: &Path) -> bool {
     name.ends_with(".rs") || name == "Cargo.toml" || name == "build.rs"
 }
 
+/// 重启状态机的三个状态（AtomicU8）。
+///
+/// - [`IDLE`]：无重启在跑；
+/// - [`RESTARTING`]：一次重启进行中；
+/// - [`PENDING`]：重启期间来了新变更，结束后需补一轮。
+const IDLE: u8 = 0;
+const RESTARTING: u8 = 1;
+const PENDING: u8 = 2;
+
+/// 一次后端重启**结束之后**要做的动作。
+#[derive(Debug, PartialEq, Eq)]
+enum RoundAction {
+    /// 本轮运行期间有新变更（状态为 PENDING）→ 转回 RESTARTING 再跑一轮。
+    Rerun,
+    /// 无新变更（状态为 RESTARTING，或异常态）→ 收尾。
+    Stop,
+}
+
+/// 根据当前重启状态决定一轮结束后的动作（纯函数，便于单测）。
+fn round_action(state: u8) -> RoundAction {
+    if state == PENDING {
+        RoundAction::Rerun
+    } else {
+        RoundAction::Stop
+    }
+}
+
 /// 先编译后端，成功后 spawn 编译产物。
 ///
 /// 流程（对齐 tauri-cli）：
@@ -213,13 +240,7 @@ pub async fn run() -> Result<()> {
         }
     }
 
-    // 重启状态机（AtomicU8）：
-    //   0 = idle（无重启在跑）
-    //   1 = restarting（一次重启进行中）
-    //   2 = restart_pending（重启期间来了新变更，结束后需补一轮）
-    const IDLE: u8 = 0;
-    const RESTARTING: u8 = 1;
-    const PENDING: u8 = 2;
+    // 重启状态机（状态常量见模块级 IDLE / RESTARTING / PENDING）
     let restart_state = Arc::new(AtomicU8::new(IDLE));
     let backend_lock = Arc::new(Mutex::new(backend));
     let backend_target_owned = Arc::new(backend_target);
@@ -281,16 +302,50 @@ pub async fn run() -> Result<()> {
                             return;
                         }
                     }
-                    // 结束后清 PENDING；若期间又有变更置回 PENDING，则补一轮
-                    if restart_state
-                        .compare_exchange(PENDING, RESTARTING, Ordering::SeqCst, Ordering::SeqCst)
-                        .is_err()
-                    {
-                        // 无 pending（是 IDLE 或已被别的轮次抢占）→ 收尾
-                        restart_state.store(IDLE, Ordering::SeqCst);
-                        return;
+                    // 一轮结束：按状态决定"补跑"还是"收尾"（见 round_action）。
+                    match round_action(restart_state.load(Ordering::SeqCst)) {
+                        RoundAction::Rerun => {
+                            // 有新变更：转回 RESTARTING 再跑一轮（CAS 失败说明状态
+                            // 又变了，交给下一轮重新判断）。
+                            let _ = restart_state.compare_exchange(
+                                PENDING,
+                                RESTARTING,
+                                Ordering::SeqCst,
+                                Ordering::SeqCst,
+                            );
+                            continue;
+                        }
+                        RoundAction::Stop => {
+                            // 无新变更：用 CAS 收尾（RESTARTING → IDLE）。
+                            // 关键：绝不能 store(IDLE)——若此刻回调恰好置入
+                            // PENDING（新变更），store 会把它覆盖掉，导致该变更
+                            // 不触发补跑（用户存盘后无反应）。
+                            if restart_state
+                                .compare_exchange(
+                                    RESTARTING,
+                                    IDLE,
+                                    Ordering::SeqCst,
+                                    Ordering::SeqCst,
+                                )
+                                .is_ok()
+                            {
+                                return;
+                            }
+                            // CAS 失败：状态不是 RESTARTING（应是 PENDING，即此刻
+                            // 新到的变更）→ 转回 RESTARTING 补跑一轮；若为其它
+                            // 异常态则直接收尾，避免空转。
+                            if restart_state.load(Ordering::SeqCst) == PENDING {
+                                let _ = restart_state.compare_exchange(
+                                    PENDING,
+                                    RESTARTING,
+                                    Ordering::SeqCst,
+                                    Ordering::SeqCst,
+                                );
+                                continue;
+                            }
+                            return;
+                        }
                     }
-                    // 有 pending → 继续循环再跑一轮
                 }
             });
         })?
@@ -360,4 +415,27 @@ async fn restart_backend(
     let new_child = spawn_backend_binary(workspace, target, addr).await?;
     *child = new_child;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// PENDING（本轮运行期间有新变更）→ 补跑一轮（不丢变更）。
+    #[test]
+    fn round_action_rerun_on_pending() {
+        assert_eq!(round_action(PENDING), RoundAction::Rerun);
+    }
+
+    /// RESTARTING（无新变更）→ 收尾。
+    #[test]
+    fn round_action_stop_on_restarting() {
+        assert_eq!(round_action(RESTARTING), RoundAction::Stop);
+    }
+
+    /// IDLE（异常态，正常循环不应出现）→ 收尾，避免空转。
+    #[test]
+    fn round_action_stop_on_idle() {
+        assert_eq!(round_action(IDLE), RoundAction::Stop);
+    }
 }
