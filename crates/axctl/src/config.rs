@@ -85,6 +85,15 @@ fn validate_host(host: &str) -> Result<()> {
     }
 }
 
+/// 判断 host 是否为本机回环（`127.x` / `::1` / `localhost`）。
+///
+/// 用于 dev / serve 的非 loopback 监听安全提示。`parse_addr` 对 IPv6
+/// 字面量保留方括号（如 `[::1]`），此处先剥括号再判定。
+pub fn is_loopback_host(host: &str) -> bool {
+    let bare = host.trim_start_matches('[').trim_end_matches(']');
+    bare == "localhost" || bare == "::1" || bare.starts_with("127.")
+}
+
 /// 从 start 目录加载 axctl 配置。
 ///
 /// 优先用 cargo metadata（能识别虚拟 manifest / workspace / 当前 member）；
@@ -240,6 +249,19 @@ mod tests {
         assert!(parse_addr("x y:3000").is_err());
         assert!(parse_addr(":3000").is_err()); // 空 host
         assert!(parse_addr("host:notaport").is_err());
+    }
+
+    /// 回环判定：127.x / ::1 / localhost（含 IPv6 方括号）→ true，其余 false。
+    #[test]
+    fn loopback_host_detection() {
+        assert!(is_loopback_host("127.0.0.1"));
+        assert!(is_loopback_host("127.5.5.5"));
+        assert!(is_loopback_host("localhost"));
+        assert!(is_loopback_host("::1"));
+        assert!(is_loopback_host("[::1]"));
+        assert!(!is_loopback_host("0.0.0.0"));
+        assert!(!is_loopback_host("192.168.1.10"));
+        assert!(!is_loopback_host("example.com"));
     }
 
     #[test]

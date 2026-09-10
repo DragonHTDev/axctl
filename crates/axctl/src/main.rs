@@ -85,40 +85,29 @@ fn dispatch(command: Command) -> anyhow::Result<()> {
             crate::logging::warn("init is not implemented yet");
             Ok(())
         }
-        Command::Dev => {
-            // dev 需要 Tokio 运行时；手动创建，确保 logging::init 已完成
-            let rt = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .context("failed to build tokio runtime")?;
-            rt.block_on(commands::dev::run())
-        }
-        Command::Build(args) => {
-            let rt = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .context("failed to build tokio runtime")?;
-            rt.block_on(commands::build::run(args))
-        }
-        Command::Serve(args) => {
-            // serve 需要 Tokio 运行时（vite preview 就绪探测 + Ctrl+C 处理）
-            let rt = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .context("failed to build tokio runtime")?;
-            rt.block_on(commands::serve::run(args))
-        }
-        Command::Package(args) => {
-            // package 需要 Tokio 运行时（vite build + cargo release + packager 编排）
-            let rt = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .context("failed to build tokio runtime")?;
-            rt.block_on(commands::package::run(args))
-        }
+        // 异步子命令共用临时 Tokio 运行时（logging::init 已先于此处完成）
+        Command::Dev => run_async(commands::dev::run()),
+        Command::Build(args) => run_async(commands::build::run(args)),
+        Command::Serve(args) => run_async(commands::serve::run(args)),
+        Command::Package(args) => run_async(commands::package::run(args)),
         Command::Info => commands::info::run(),
         Command::DebugWs => debug_ws(),
     }
+}
+
+/// 在临时多线程 Tokio 运行时上执行一个异步子命令体。
+///
+/// dev / build / serve / package 共用。`logging::init` 已在 `main` 中最先
+/// 完成，早于此处的运行时创建，保证子命令内日志管道可用。
+fn run_async<F>(future: F) -> anyhow::Result<()>
+where
+    F: std::future::Future<Output = anyhow::Result<()>>,
+{
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("failed to build tokio runtime")?;
+    rt.block_on(future)
 }
 
 /// 调试：在 cwd 解析 workspace 与 WatchSet，逐项打印。

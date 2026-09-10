@@ -193,12 +193,7 @@ pub async fn run() -> Result<()> {
     // 安全提示：非 loopback 监听会把无鉴权的后端与 vite dev server
     // 暴露到局域网（vite 的 @fs 与 HMR 有历史 RCE：CVE-2025-30221 等），
     // 只应在受信的本机开发环境使用。
-    let is_loopback = match proxy_host.as_str() {
-        "127.0.0.1" | "::1" | "localhost" => true,
-        host if host.starts_with("127.") => true,
-        _ => false,
-    };
-    if !is_loopback {
+    if !config::is_loopback_host(&proxy_host) {
         logging::warn(format!(
             "proxy_addr {proxy_addr} is not loopback: the unauthenticated backend and \
              vite dev server will be exposed to the network. For local development only."

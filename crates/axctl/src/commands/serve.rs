@@ -58,12 +58,22 @@ pub async fn run(args: ServeArgs) -> Result<()> {
     logging::info(format!("serving production frontend from {}", frontend_root.display()));
     logging::info(format!("using vite preview at http://{}", args.addr));
 
+    let (host, port) = crate::config::parse_addr(&args.addr)?;
+
+    // 安全提示：vite preview 默认只绑本机；显式指定非 loopback 地址会把
+    // 构建产物暴露到网络（通常仅在有意做局域预览时需要）。
+    if !crate::config::is_loopback_host(&host) {
+        logging::warn(format!(
+            "serve address {} is not loopback: the built frontend will be exposed \
+             to the network.",
+            args.addr
+        ));
+    }
+
     // 启动 vite preview
     let mut preview = vite::spawn_vite_preview(&frontend_root, &args.addr, args.open)
         .await
         .context("failed to start vite preview")?;
-
-    let (host, port) = crate::config::parse_addr(&args.addr)?;
 
     // 就绪探测：每轮先查 preview 是否已退出（vite 异步启动，端口被占 /
     // dist 缺失时启动后才会报错退出——必须持续监控，不能只 spawn 后查一次），
