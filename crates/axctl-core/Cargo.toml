@@ -5,6 +5,7 @@ edition.workspace = true
 description = "Core library for axctl: embed and serve frontend assets in axum projects"
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
 keywords = ["axum", "embed", "static", "spa"]
 categories = ["web-programming", "development-tools"]
 
