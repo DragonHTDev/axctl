@@ -56,8 +56,9 @@ use crate::embed::{File, FrontendAssets};
 /// 挂载 SPA fallback 路由。
 ///
 /// 用 catch-all 单 handler：按路径查内嵌文件，命中则带缓存头返回；
-/// 未命中且是浏览器导航（GET + Accept: text/html）回退 index.html，
-/// 其余 404。handler 不 extract state，故返回 [`Router`]`<S>` 可并入任意
+/// 未命中时按**路径扩展名**判断——无扩展名（SPA 客户端路由）回退
+/// index.html，带扩展名（真实资源请求）返回 404，避免 `fetch()` 误拿
+/// HTML。handler 不 extract state，故返回 [`Router`]`<S>` 可并入任意
 /// 带 state 的用户 router。
 pub fn spa<S>(assets: FrontendAssets<'static>) -> Router<S>
 where

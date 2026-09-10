@@ -32,7 +32,7 @@ tokio-tungstenite = "0.24"
 futures-util = "0.3"
 console = "0.15"
 
-# Unix 进程组终止（kill_tree 用 setpgid + kill(-pgid)）
+# Unix 终止进程树：pgrep -P 递归收集后代 + libc::kill 逐个发信号
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
