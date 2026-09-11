@@ -74,7 +74,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
-name = "axctl"
+name = "axctl-core"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "http-body-util",
+ "include_dir",
+ "mime_guess",
+ "tokio",
+ "tower",
+]
+
+[[package]]
+name = "axctl-rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -95,18 +107,6 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "axctl-core"
-version = "0.1.0"
-dependencies = [
- "axum",
- "http-body-util",
- "include_dir",
- "mime_guess",
- "tokio",
- "tower",
 ]
 
 [[package]]

@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-#### `axctl` (CLI)
+#### `axctl-rs` (CLI)
 
 - `axctl dev` — development mode for axum + Vite projects: starts Vite, builds
   and runs the backend, and exposes a unified entry port with a reverse proxy

@@ -1,6 +1,6 @@
 # axctl-core
 
-Core runtime library for [`axctl`](https://crates.io/crates/axctl): embed a
+Core runtime library for [`axctl-rs`](https://crates.io/crates/axctl-rs): embed a
 Vite build output into your axum server binary and serve it with SPA fallback.
 
 ## What it provides

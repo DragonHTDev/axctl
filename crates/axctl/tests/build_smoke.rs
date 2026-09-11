@@ -16,7 +16,7 @@
 //! cd tests\fixtures\minimal-app
 //! pnpm exec vite build
 //! # 再跑冒烟
-//! cargo test -p axctl --test build_smoke -- --ignored --nocapture
+//! cargo test -p axctl-rs --test build_smoke -- --ignored --nocapture
 //! ```
 
 use std::path::{Path, PathBuf};

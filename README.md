@@ -21,11 +21,15 @@ axctl replaces ad-hoc Node glue scripts (`dev` / `build` / `package` in a
 ## Install
 
 ```bash
+# npm (recommended: prebuilt binaries per platform)
+npx axctl --help
+# or: npm install --save-dev axctl
+
+# crates.io (requires a Rust toolchain; installs the `axctl` command)
+cargo install axctl-rs
+
 # from a checkout
 cargo install --path crates/axctl
-
-# or, once published
-cargo install axctl
 ```
 
 ## Quick start
@@ -110,7 +114,7 @@ cargo fmt --all --check
 Ignored black-box smoke tests (require Node + a built fixture):
 
 ```bash
-cargo test -p axctl --test build_smoke -- --ignored --nocapture
+cargo test -p axctl-rs --test build_smoke -- --ignored --nocapture
 ```
 
 ## Documentation

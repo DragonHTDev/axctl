@@ -26,7 +26,7 @@ axctl 是 workspace 双 crate 结构：
 
 | crate        | 类型       | 职责                                                          |
 | ------------ | ---------- | ------------------------------------------------------------- |
-| `axctl`      | CLI 二进制 | 命令编排（dev / build / serve / package / info）               |
+| `axctl-rs`      | CLI 二进制 | 命令编排（dev / build / serve / package / info）               |
 | `axctl-core` | 库         | 供**用户项目**依赖：编译期内嵌前端（`frontend!`）+ SPA 服务（`spa`） |
 
 为什么 `axctl-core` 是库而不是 CLI 的一部分：把"前端构建产物内嵌进 server

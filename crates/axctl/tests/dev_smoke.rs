@@ -9,7 +9,7 @@
 //! 且会真实起进程、占端口。CI 常规流水线跳过，本地冒烟手动跑：
 //!
 //! ```powershell
-//! cargo test -p axctl --test dev_smoke -- --ignored --nocapture
+//! cargo test -p axctl-rs --test dev_smoke -- --ignored --nocapture
 //! ```
 
 use std::path::{Path, PathBuf};

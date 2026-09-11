@@ -10,8 +10,8 @@
 ```bash
 # 构建 / 运行
 cargo build
-cargo run -p axctl -- --help
-cargo run -p axctl -- info
+cargo run -p axctl-rs -- --help
+cargo run -p axctl-rs -- info
 
 # 质量门（提交前必须全绿）
 cargo fmt --all --check
@@ -19,7 +19,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 
 # 发版前的打包清单校验
-cargo package -p axctl --list
+cargo package -p axctl-rs --list
 cargo package -p axctl-core --list
 ```
 
@@ -63,7 +63,7 @@ cargo package -p axctl-core --list
 # 先构建 fixture 前端
 cd tests/fixtures/minimal-app && pnpm exec vite build && cd ../../..
 
-cargo test -p axctl --test build_smoke -- --ignored --nocapture
+cargo test -p axctl-rs --test build_smoke -- --ignored --nocapture
 ```
 
 这些不进常规 CI（依赖 Node 环境）。
@@ -75,7 +75,7 @@ cargo test -p axctl --test build_smoke -- --ignored --nocapture
 1. `cargo fmt --all --check`
 2. `cargo clippy --workspace --all-targets -- -D warnings`
 3. `cargo test --workspace`
-4. `cargo package -p axctl --list` 与 `cargo package -p axctl-core --list`
+4. `cargo package -p axctl-rs --list` 与 `cargo package -p axctl-core --list`
 
 ## 提交与评审
 

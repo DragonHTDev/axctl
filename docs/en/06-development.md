@@ -10,8 +10,8 @@
 ```bash
 # build / run
 cargo build
-cargo run -p axctl -- --help
-cargo run -p axctl -- info
+cargo run -p axctl-rs -- --help
+cargo run -p axctl-rs -- info
 
 # quality gates (must be green before committing)
 cargo fmt --all --check
@@ -19,7 +19,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 
 # packaging manifest check (before a release)
-cargo package -p axctl --list
+cargo package -p axctl-rs --list
 cargo package -p axctl-core --list
 ```
 
@@ -64,7 +64,7 @@ Vite with the fixture frontend already built:
 # build the fixture frontend first
 cd tests/fixtures/minimal-app && pnpm exec vite build && cd ../../..
 
-cargo test -p axctl --test build_smoke -- --ignored --nocapture
+cargo test -p axctl-rs --test build_smoke -- --ignored --nocapture
 ```
 
 These are not part of the regular CI (they need a Node environment).
@@ -76,7 +76,7 @@ These are not part of the regular CI (they need a Node environment).
 1. `cargo fmt --all --check`
 2. `cargo clippy --workspace --all-targets -- -D warnings`
 3. `cargo test --workspace`
-4. `cargo package -p axctl --list` and `cargo package -p axctl-core --list`
+4. `cargo package -p axctl-rs --list` and `cargo package -p axctl-core --list`
 
 ## Commits and review
 

@@ -40,7 +40,7 @@ jobs:
 
       - name: 校验可发布（readme/license 等清单）
         run: |
-          cargo package -p axctl --list
+          cargo package -p axctl-rs --list
           cargo package -p axctl-core --list
 
       # 说明：集成 smoke 测试（dev_smoke / preview_smoke / build_smoke）均为

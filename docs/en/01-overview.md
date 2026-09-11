@@ -28,7 +28,7 @@ axctl is a workspace of two crates:
 
 | Crate        | Kind          | Responsibility                                                         |
 | ------------ | ------------- | ---------------------------------------------------------------------- |
-| `axctl`      | CLI binary    | Command orchestration (dev / build / serve / package / info)           |
+| `axctl-rs`      | CLI binary    | Command orchestration (dev / build / serve / package / info)           |
 | `axctl-core` | library       | For **user projects**: compile-time frontend embedding (`frontend!`) + SPA serving (`spa`) |
 
 Why `axctl-core` is a library rather than part of the CLI: embedding the built

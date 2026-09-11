@@ -6,7 +6,7 @@
   "type": "module",
   "packageManager": "pnpm@9.15.9",
   "scripts": {
-    "axctl": "cargo run -p axctl --",
+    "axctl": "cargo run -p axctl-rs --",
     "sync-version": "node scripts/sync-version.mjs"
   }
 }

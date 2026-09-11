@@ -18,11 +18,11 @@ axctl replaces ad-hoc Node glue scripts (`dev` / `build` / `package` in a
 ## Install
 
 ```bash
-# from a checkout
-cargo install --path crates/axctl
+# npm (recommended: prebuilt binaries per platform)
+npx axctl --help
 
-# or, once published
-cargo install axctl
+# crates.io (installs the `axctl` command)
+cargo install axctl-rs
 ```
 
 ## Quick start

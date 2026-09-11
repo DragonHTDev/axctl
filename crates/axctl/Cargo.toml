@@ -1,5 +1,5 @@
 [package]
-name = "axctl"
+name = "axctl-rs"
 version.workspace = true
 edition.workspace = true
 description = "An all-in-one development tool for axum projects (dev / build / serve / package / info)"
@@ -9,13 +9,14 @@ readme = "README.md"
 keywords = ["axum", "cli", "dev-tools", "vite", "web"]
 categories = ["command-line-utilities", "development-tools"]
 
-# 编译成名为 axctl 的单个二进制，同时让 `cargo axctl` 自动可用
+# 编译成名为 axctl 的单个二进制（crate 名 axctl-rs，命令名保持 axctl）
 [[bin]]
 name = "axctl"
 path = "src/main.rs"
 
 [dependencies]
-axctl-core = { path = "../axctl-core" }
+# version 供 crates.io 发布（path 供本地开发）
+axctl-core = { path = "../axctl-core", version = "0.1.0" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "net", "process", "signal", "time", "sync", "fs"] }
