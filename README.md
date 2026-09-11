@@ -95,7 +95,7 @@ See [`crates/axctl-core/README.md`](crates/axctl-core/README.md) for details.
 crates/
 ├── axctl/         # CLI binary (clap + command orchestration)
 └── axctl-core/    # Library for user projects (embed / serve / probe)
-docs/design.md     # architecture and design decisions
+docs/              # handbook (zh-CN / en)
 tests/fixtures/    # minimal-app (Vite + axum), embed-app (pure Rust)
 ```
 
@@ -115,7 +115,9 @@ cargo test -p axctl --test build_smoke -- --ignored --nocapture
 
 ## Documentation
 
-See [`docs/design.md`](docs/design.md) for architecture and design decisions.
+See the [handbook](docs/README.md) for architecture, configuration, and
+development guides (available in [中文](docs/zh-CN/01-overview.md) and
+[English](docs/en/01-overview.md)).
 
 ## License
 

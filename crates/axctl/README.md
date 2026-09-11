@@ -68,8 +68,8 @@ companion crate [`axctl-core`](https://crates.io/crates/axctl-core)
 
 ## Documentation
 
-See [`docs/design.md`](https://github.com/dragonhtdev/axctl/blob/master/docs/design.md)
-for architecture and design decisions.
+See the [handbook](https://github.com/dragonhtdev/axctl/blob/master/docs/README.md)
+for architecture, configuration, and development guides.
 
 ## License
 
