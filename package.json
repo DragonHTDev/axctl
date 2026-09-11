@@ -1,11 +1,12 @@
 {
-  "name": "axctl",
+  "name": "axctl-workspace",
   "version": "0.1.0",
-  "description": "An all-in-one development tool for axum projects (dev / build / serve / package / info)",
+  "description": "Monorepo for axctl (CLI), axctl-core (library) and the npm distribution",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.15.9",
   "scripts": {
-    "axctl": "cargo run -p axctl --"
+    "axctl": "cargo run -p axctl --",
+    "sync-version": "node scripts/sync-version.mjs"
   }
 }

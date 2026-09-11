@@ -1,0 +1,36 @@
+{
+  "name": "axctl",
+  "version": "0.1.0",
+  "description": "All-in-one development tool for axum + Vite projects",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dragonhtdev/axctl"
+  },
+  "homepage": "https://github.com/dragonhtdev/axctl#readme",
+  "bugs": "https://github.com/dragonhtdev/axctl/issues",
+  "bin": {
+    "axctl": "cli.js"
+  },
+  "files": [
+    "cli.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "axctl-win32-x64": "0.1.0",
+    "axctl-darwin-x64": "0.1.0",
+    "axctl-darwin-arm64": "0.1.0",
+    "axctl-linux-x64": "0.1.0",
+    "axctl-linux-arm64": "0.1.0"
+  },
+  "keywords": [
+    "axum",
+    "vite",
+    "cli",
+    "dev-tools",
+    "web"
+  ]
+}
