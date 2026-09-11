@@ -1,0 +1,171 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # 0. 校验 tag 与 Cargo.toml 版本一致，并检查质量门
+  validate:
+    name: 校验版本与质量门
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 校验 tag 与 Cargo.toml 版本一致
+        id: meta
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          CARGO_VERSION="$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+          if [ "$TAG" != "$CARGO_VERSION" ]; then
+            echo "tag ($TAG) != Cargo.toml workspace version ($CARGO_VERSION)"
+            exit 1
+          fi
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: 缓存 Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: 质量门（fmt / clippy / test）
+        run: |
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace
+
+      - name: 校验可打包
+        run: |
+          cargo package -p axctl-rs --list
+          cargo package -p axctl-core --list
+
+  # 1. 各平台构建二进制并组装平台包
+  build:
+    name: 构建 ${{ matrix.triple }}
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            triple: x86_64-pc-windows-msvc
+          - os: macos-13
+            triple: x86_64-apple-darwin
+          - os: macos-latest
+            triple: aarch64-apple-darwin
+          - os: ubuntu-latest
+            triple: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            triple: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.triple }}
+
+      - name: 缓存 Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: 构建 release 二进制
+        run: cargo build --release -p axctl-rs --target ${{ matrix.triple }}
+
+      - name: 设置 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 组装平台包
+        run: node scripts/build-npm-packages.mjs --triple ${{ matrix.triple }}
+
+      - name: 上传平台包
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-${{ matrix.triple }}
+          path: npm/platforms/*/
+          if-no-files-found: error
+          retention-days: 3
+
+  # 2. 发布 crates.io（先库后 CLI）
+  publish-crates:
+    name: 发布 crates.io
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 发布 axctl-core
+        run: cargo publish -p axctl-core --token "${{ secrets.CARGO_REGISTRY_TOKEN }}"
+
+      - name: 等待 crates.io 索引
+        run: sleep 30
+
+      - name: 发布 axctl-rs
+        run: cargo publish -p axctl-rs --token "${{ secrets.CARGO_REGISTRY_TOKEN }}"
+
+  # 3. 发布 npm（先平台包后主包）
+  publish-npm:
+    name: 发布 npm
+    needs: [validate, build, publish-crates]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+
+      - name: 下载全部平台包
+        uses: actions/download-artifact@v4
+        with:
+          pattern: platform-*
+          path: npm/platforms
+          merge-multiple: true
+
+      - name: 发布平台子包
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          for dir in npm/platforms/*/; do
+            echo "publishing $dir"
+            npm publish "$dir" --access public
+          done
+
+      - name: 发布主包
+        working-directory: npm/axctl
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
