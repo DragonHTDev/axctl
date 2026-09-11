@@ -1,0 +1,19 @@
+{
+  "name": "axctl-darwin-arm64",
+  "version": "0.1.0",
+  "description": "axctl binary for macOS arm64 (Apple Silicon)",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dragonhtdev/axctl"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "axctl"
+  ]
+}

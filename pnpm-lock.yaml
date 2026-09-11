@@ -1,0 +1,37 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .: {}
+
+  npm/axctl:
+    optionalDependencies:
+      axctl-darwin-arm64:
+        specifier: 0.1.0
+        version: link:../platforms/axctl-darwin-arm64
+      axctl-darwin-x64:
+        specifier: 0.1.0
+        version: link:../platforms/axctl-darwin-x64
+      axctl-linux-arm64:
+        specifier: 0.1.0
+        version: link:../platforms/axctl-linux-arm64
+      axctl-linux-x64:
+        specifier: 0.1.0
+        version: link:../platforms/axctl-linux-x64
+      axctl-win32-x64:
+        specifier: 0.1.0
+        version: link:../platforms/axctl-win32-x64
+
+  npm/platforms/axctl-darwin-arm64: {}
+
+  npm/platforms/axctl-darwin-x64: {}
+
+  npm/platforms/axctl-linux-arm64: {}
+
+  npm/platforms/axctl-linux-x64: {}
+
+  npm/platforms/axctl-win32-x64: {}

@@ -1,0 +1,19 @@
+{
+  "name": "axctl-linux-arm64",
+  "version": "0.1.0",
+  "description": "axctl binary for Linux arm64",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dragonhtdev/axctl"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "axctl"
+  ]
+}
